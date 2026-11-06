@@ -49,6 +49,8 @@ test("CVs: save, rank against a job, tailor with a stubbed model, reject bad inp
     assert.equal((await s.call("GET", `/api/feed/${id}`)).json.title, "Product Manager");
 
     assert.equal((await s.call("POST", `/api/feed/${id}/tailor`, { cv: "Product EN", kind: "summary" })).status, 400, "no AI configured yet");
+    const br = await s.call("GET", `/api/feed/${id}/brief?kind=cv&cv=${encodeURIComponent("Product EN")}`); assert.equal(br.status, 200, "the agent brief needs no AI setup"); assert.match(br.json.brief, /Never invent/); assert.match(br.json.brief, /Product Manager at /);
+    assert.equal((await s.call("GET", `/api/feed/${id}/brief?kind=nope&cv=Product%20EN`)).status, 400); assert.equal((await s.call("GET", `/api/feed/${id}/brief?kind=cv&cv=Missing`)).status, 400);
     assert.equal((await s.call("PUT", "/api/settings", { ai: { provider: "ollama" } })).status, 200);
     const t = await s.call("POST", `/api/feed/${id}/tailor`, { cv: "Product EN", kind: "summary" });
     assert.equal(t.json.text, "Tailored summary"); assert.match(prompt, /Product Manager at Acme/); assert.match(prompt, /discovery/);

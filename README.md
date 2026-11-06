@@ -48,7 +48,7 @@ lives, default `data/`), `NO_SCHEDULER=1` (do not run the daily sweep from this 
 | **Tracker** | Statuses, notes, which CV you sent, reply threads, top picks, "easy apply" marker |
 | **Email reply tracking** | Reads your inbox over IMAP (read-only), finds replies from companies you applied to, updates the status and attaches the email to the card. Italian and English. Uncertain matches go to a review list instead of being applied |
 | **CVs** | Upload `.docx`, `.pdf`, `.txt` or paste text. For every job it shows which of your CVs covers the posting best and which key terms are missing |
-| **AI tailoring (optional)** | Tailored summary, cover letter or gap list, grounded in your CV only. Anthropic, any OpenAI-compatible API, or a local model through Ollama so nothing leaves your machine |
+| **AI tailoring (optional)** | Tailored summary, cover letter or gap list, grounded in your CV only. Anthropic, any OpenAI-compatible API, or a local model through Ollama so nothing leaves your machine. Or press "Brief" to copy the posting, your CV and the rules for the AI agent you already use (see `skills/tailor`) |
 | **Daily digest** | In the app, and optionally pushed to your phone via ntfy.sh, a Discord or Slack webhook |
 | **Browser extension** | For LinkedIn, Indeed or any page: a side panel that stays open while you browse; press Check this page on a posting to see whether it fits you and save it to the tracker. It reads a page only when you press the button |
 | **Insights** | Response rate, typical days to a reply, which CV gets answers |

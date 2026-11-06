@@ -13,7 +13,7 @@ import { parseLocation } from "./geo.mjs";
 import { matchUser, seedBoards, disabledFeeds, feedNames } from "./sweep.mjs";
 import { ADAPTERS } from "./sources/index.mjs";
 import { rankCvs, textFromUpload } from "./cv.mjs";
-import { tailor, aiConfigFromInput, ollamaModels, AI_PROVIDERS, TAILOR_KINDS } from "./ai.mjs";
+import { tailor, agentBrief, aiConfigFromInput, ollamaModels, AI_PROVIDERS, TAILOR_KINDS } from "./ai.mjs";
 import { accountConfig, accountFromInput, testLogin, checkMail } from "./mail/check.mjs";
 import { PROVIDERS } from "./mail/classify.mjs";
 import { encrypt, decrypt } from "./secrets.mjs";
@@ -266,6 +266,13 @@ export function createApp(db, { secureCookies = false, aiFetch = fetch } = {}) {
       const r = jobFor(user.id, m[1]); if (!r) throw auth.httpErr(404, "Job not found.");
       const cvs = db.prepare("SELECT name, text FROM cvs WHERE user_id = ? AND text != ''").all(user.id);
       return sendJson(res, 200, { ranked: rankCvs(cvs, r, r.cv), hasCvs: cvs.length > 0 });
+    }
+    if ((m = p.match(/^\/api\/feed\/(\d+)\/brief$/)) && method === "GET") { // text for the user's own AI agent; no AI setup needed
+      const r = jobFor(user.id, m[1]); if (!r) throw auth.httpErr(404, "Job not found.");
+      const kind = url.searchParams.get("kind") || "cv"; if (!TAILOR_KINDS.includes(kind)) throw auth.httpErr(400, "Unknown kind.");
+      const cv = db.prepare("SELECT text FROM cvs WHERE user_id = ? AND name = ?").get(user.id, String(url.searchParams.get("cv") || ""));
+      if (!cv || !cv.text) throw auth.httpErr(400, "Pick one of your saved CVs first.");
+      return sendJson(res, 200, { brief: agentBrief(kind, { cv: cv.text, job: r }) });
     }
     if ((m = p.match(/^\/api\/feed\/(\d+)\/tailor$/)) && method === "POST") {
       const r = jobFor(user.id, m[1]); if (!r) throw auth.httpErr(404, "Job not found.");
