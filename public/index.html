@@ -97,6 +97,8 @@
   @keyframes thud { 0%,100% { translate:0 0; } 40% { translate:0 3px; } }
   .digest { background:var(--yellow); background-image:none; color:var(--ink); border:3px double var(--ink); } .digest .link { color:var(--ink); }
   .explain ul { margin:8px 0 8px 22px; font-family:var(--typed); }
+  .builder { display:grid; grid-template-columns:minmax(300px,1fr) 810px; gap:18px; align-items:start; } .prevwrap { overflow:auto; max-width:100%; } iframe.cvprev { width:794px; height:1123px; border:2px solid var(--line); background:#fff; border-radius:4px; display:block; }
+  @media (max-width:1300px) { .builder { grid-template-columns:1fr; } } .ent { border:2px dotted var(--line); border-radius:4px; padding:10px; margin:8px 0; } .sec { margin-top:14px; }
   .detail { margin-top:12px; border-top:2px dotted var(--line); padding-top:4px; }
 
   /* tracker slips and insights blocks */
@@ -400,7 +402,7 @@ function detailPanel(j, ai) {
       fit.hasCvs ? h("div", {}, h("h3", {}, "How your CVs cover this posting"),
         fit.ranked.map(r => h("div", { style: "margin:6px 0" }, h("b", {}, r.name), h("span", { class: "tag " + (r.coverage >= 60 ? "fit" : "check"), style: "margin-left:8px" }, r.coverage + "% of the key terms"), r.trackPick ? h("span", { class: "tag" }, "your pick for this role type") : null,
           r.missing.length ? h("div", { class: "tiny" }, "Not in this CV: " + r.missing.join(", ")) : null)),
-        ai ? h("div", { class: "row", style: "margin-top:8px" }, ["summary", "cover_letter", "gaps"].map(k => { const b = h("button", { onclick: () => run(k, best.name, b) }, { summary: "Tailor summary", cover_letter: "Cover letter", gaps: "What is missing" }[k] + ` (${best.name})`); return b; })) : h("p", { class: "tiny" }, "Want a tailored summary or cover letter? Connect an AI model in Settings (a local one needs no key)."), h("div", { class: "row", style: "margin-top:8px" }, h("span", { class: "tiny" }, "Or use the AI agent you already have:"), [["cv", "Brief: tailor my CV"], ["cover_letter", "Brief: cover letter"], ["gaps", "Brief: what is missing"]].map(([k, label]) => { const b = h("button", { title: "Copies the posting, your CV and the rules, so your own AI agent can write it. Nothing is sent anywhere.", onclick: async () => { b.disabled = true; try { const r = await api(`/feed/${j.id}/brief?kind=${k}&cv=${encodeURIComponent(best.name)}`); try { await navigator.clipboard.writeText(r.brief); toast("Brief copied. Give it to your AI agent."); } catch { out.style.display = "block"; out.textContent = r.brief; } } catch (e) { toast(e.message); } b.disabled = false; } }, label); return b; })), out)
+        ai ? h("div", { class: "row", style: "margin-top:8px" }, ["summary", "cover_letter", "gaps"].map(k => { const b = h("button", { onclick: () => run(k, best.name, b) }, { summary: "Tailor summary", cover_letter: "Cover letter", gaps: "What is missing" }[k] + ` (${best.name})`); return b; })) : h("p", { class: "tiny" }, "Want a tailored summary or cover letter? Connect an AI model in Settings (a local one needs no key)."), h("div", { class: "row", style: "margin-top:8px" }, h("span", { class: "tiny" }, "Or use the AI agent you already have:"), [["cv_json", "Brief: CV for the builder"], ["cv", "Brief: tailor my CV"], ["cover_letter", "Brief: cover letter"], ["gaps", "Brief: what is missing"]].map(([k, label]) => { const b = h("button", { title: "Copies the posting, your CV and the rules, so your own AI agent can write it. Nothing is sent anywhere.", onclick: async () => { b.disabled = true; try { const r = await api(`/feed/${j.id}/brief?kind=${k}&cv=${encodeURIComponent(best.name)}`); try { await navigator.clipboard.writeText(r.brief); toast("Brief copied. Give it to your AI agent."); } catch { out.style.display = "block"; out.textContent = r.brief; } } catch (e) { toast(e.message); } b.disabled = false; } }, label); return b; })), out)
         : h("p", { class: "muted" }, "Add your CVs in Settings and I will show which one fits each posting best."),
       h("h3", {}, "Posting"), h("div", { class: "thread", style: "max-height:220px" }, job.description || "No description in the feed. Open the posting for the full text."));
   }).catch(e => { box.textContent = e.message; });
@@ -496,10 +498,84 @@ async function renderSettings() {
   $app.replaceChildren(shell("settings", cvCard, mailCard, schedCard, aiCard, srcCard, extCard, msg));
 }
 
+// ---------- CV builder: edit a structured CV, watch the one-page preview, print the PDF ----------
+let builderOpen = null; // which build stays open across a save
+async function renderBuilder() {
+  const [{ builds, blank }, { cvs }] = await Promise.all([api("/cv-builds"), api("/cvs")]);
+  const fix = d => { d = { ...structuredClone(blank), ...(d && typeof d === "object" ? d : {}) }; d.contact = { ...blank.contact, ...(d.contact || {}) }; for (const k of ["experience", "projects", "skills", "education"]) if (!Array.isArray(d[k])) d[k] = []; for (const k of ["experience", "projects"]) d[k] = d[k].map(x => ({ ...x, bullets: Array.isArray(x?.bullets) ? x.bullets : [] })); return d; };
+  const cur = { id: null, name: "", data: fix(blank) };
+  const lines = s => s.split("\n").map(x => x.trim()).filter(Boolean);
+  const msg = h("div", { class: "tiny", style: "min-height:18px;margin-top:6px" });
+  const say = (t, bad) => { msg.textContent = t; msg.style.color = bad ? "var(--red, #b3261e)" : ""; };
+  const guard = fn => async () => { try { await fn(); } catch (e) { say(e.message, true); } };
+  const fit = h("span", { class: "tag" }, "");
+  const frame = h("iframe", { class: "cvprev", title: "CV preview", sandbox: "allow-same-origin" });
+  let timer = 0, lastHtml = "";
+  const preview = async () => {
+    try { const r = await api("/cv-render", "POST", { data: cur.data }); lastHtml = r.html; frame.srcdoc = r.html; } catch (e) { say(e.message, true); }
+  };
+  frame.addEventListener("load", () => { // the page is 297mm tall with 14mm margins; measure what the content needs
+    try { const px = mm => mm / 25.4 * 96, used = frame.contentDocument.body.scrollHeight - 2 * px(14), avail = px(297 - 28);
+      if (used <= avail + 1) { fit.className = "tag fit"; fit.textContent = "Fits one page"; } else { fit.className = "tag check"; fit.textContent = `About ${Math.round((used / avail - 1) * 100)}% too long: cut the weakest bullet, not the font size`; } } catch { /* preview not ready */ }
+  });
+  const changed = () => { clearTimeout(timer); timer = setTimeout(preview, 250); };
+  const txt = (obj, key, label, opts = {}) => { const el = h(opts.area ? "textarea" : "input", { rows: opts.area ? String(opts.rows || 3) : null, placeholder: opts.ph || "", value: opts.area ? null : obj[key] || "" }); if (opts.area) el.value = opts.lines ? (obj[key] || []).join("\n") : obj[key] || "";
+    el.addEventListener("input", () => { obj[key] = opts.lines ? lines(el.value) : el.value; changed(); }); return field(label, el, opts.hint); };
+  const formBox = h("div", {});
+  const list = (title, key, makeBlank, parts) => h("div", { class: "sec" }, h("h3", {}, title),
+    cur.data[key].map((item, i) => h("div", { class: "ent" }, h("div", { class: "grid" }, parts(item)), h("div", { class: "row", style: "margin-top:6px" },
+      i > 0 ? h("button", { class: "link", onclick: () => { cur.data[key].splice(i - 1, 0, cur.data[key].splice(i, 1)[0]); drawForm(); changed(); } }, "Move up") : null,
+      h("button", { class: "link danger", onclick: () => { cur.data[key].splice(i, 1); drawForm(); changed(); } }, "Remove")))),
+    h("button", { onclick: () => { cur.data[key].push(makeBlank()); drawForm(); changed(); } }, "Add"));
+  const drawForm = () => {
+    const d = cur.data, y = window.scrollY, langSel = h("select", { onchange: e => { d.lang = e.target.value; changed(); } }, h("option", { value: "en", selected: d.lang !== "it" }, "English headings"), h("option", { value: "it", selected: d.lang === "it" }, "Italian headings"));
+    formBox.replaceChildren(
+      h("div", { class: "grid" }, txt(d, "name", "Name"), txt(d, "headline", "Headline", { ph: "Product builder" }), field("Language of the headings", langSel)),
+      h("div", { class: "grid", style: "margin-top:8px" }, ["city", "email", "phone", "linkedin", "github", "portfolio"].map(k => txt(d.contact, k, k[0].toUpperCase() + k.slice(1)))),
+      h("div", { style: "margin-top:8px" }, txt(d, "summary", "Summary", { area: true, rows: 3, hint: "Two or three plain sentences, evidence first." })),
+      list("Experience", "experience", () => ({ role: "", employer: "", place: "", dates: "", bullets: [] }), e => [txt(e, "role", "Role"), txt(e, "employer", "Employer"), txt(e, "place", "Place"), txt(e, "dates", "Dates", { ph: "2022 - 2025" }), h("div", { style: "grid-column:1/-1" }, txt(e, "bullets", "Bullets", { area: true, lines: true, rows: 4, hint: "One per line. The weakest one goes first when the page is full." }))]),
+      list("Selected work", "projects", () => ({ name: "", url: "", status: "", bullets: [] }), p => [txt(p, "name", "Project"), txt(p, "url", "Link"), txt(p, "status", "Status", { ph: "live, open source" }), h("div", { style: "grid-column:1/-1" }, txt(p, "bullets", "Bullets", { area: true, lines: true, rows: 3 }))]),
+      h("div", { class: "sec", style: "margin-top:12px" }, txt(d, "skills", "Skills", { area: true, lines: true, rows: 4, hint: "One group per line, like \"Tools: SQL, Playwright\"." })),
+      list("Education", "education", () => ({ degree: "", school: "", dates: "", note: "" }), e => [txt(e, "degree", "Degree"), txt(e, "school", "School"), txt(e, "dates", "Dates"), txt(e, "note", "Note", { hint: "Grade or thesis, only if worth stating." })]),
+      h("div", { class: "sec", style: "margin-top:12px" }, txt(d, "languages", "Languages", { ph: "English, Italian" })));
+    window.scrollTo(0, y);
+  };
+  const load = async id => { const r = await api(`/cv-builds/${id}`); cur.id = r.id; builderOpen = r.id; cur.name = r.name; cur.data = fix(r.data); nameIn.value = r.name; drawForm(); preview(); say(`Opened "${r.name}".`); };
+  const nameIn = h("input", { placeholder: "Name, e.g. Product EN or Acme PM", "aria-label": "CV name" });
+  nameIn.addEventListener("input", () => { cur.name = nameIn.value; });
+  const save = guard(async () => { const r = await api("/cv-builds", "PUT", { id: cur.id, name: cur.name, data: cur.data }); cur.id = r.id; builderOpen = r.id; toast("CV saved. It now counts when Posto compares your CVs with a job."); render(); });
+  const download = guard(async () => {
+    if (cur.id === null) throw new Error("Save it first, then download.");
+    say("Printing the PDF...");
+    const r = await fetch(`/api/cv-builds/${cur.id}/pdf`); if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error(j.error || "Could not print the PDF."); }
+    const pages = r.headers.get("x-cv-pages"), blob = await r.blob(), a = h("a", { href: URL.createObjectURL(blob), download: (cur.name || "cv").replace(/[^A-Za-z0-9._-]+/g, "_") + ".pdf" });
+    document.body.append(a); a.click(); a.remove(); say(pages && pages !== "1" ? `Printed, but it is ${pages} pages. Cut the weakest bullets and print again.` : "Printed: one page.");
+  });
+  const pasted = h("textarea", { rows: "4", placeholder: "Paste the JSON your AI agent returned" });
+  const fromSaved = h("select", { "aria-label": "Saved CV" }, h("option", { value: "" }, "Pick one of my saved CVs"), cvs.map(c => h("option", { value: c.name }, c.name)));
+  const copy = async text => { try { await navigator.clipboard.writeText(text); toast("Brief copied. Give it to your AI agent."); } catch { say("Could not reach the clipboard.", true); } };
+  const intro = h("div", { class: "card" }, h("h2", {}, "CV builder"),
+    h("p", { class: "muted", style: "margin-bottom:8px" }, "Build one clean, one-page CV that applicant-tracking systems can read, edit it with a live preview, and print it to PDF with the Chrome or Edge already on this computer. Single column, standard section names, real text only. Everything stays on this computer."),
+    h("div", { class: "row" }, h("b", {}, "Your builds:"), builds.length ? builds.map(b => h("button", { onclick: () => load(b.id) }, b.name)) : h("span", { class: "tiny" }, "none yet"), h("button", { class: "primary", onclick: () => { cur.id = null; builderOpen = null; cur.name = ""; cur.data = fix(blank); nameIn.value = ""; drawForm(); preview(); say("A blank CV."); } }, "New CV")),
+    h("h3", {}, "Start from a CV you already saved, or tailor one for a job"),
+    h("p", { class: "tiny" }, "No AI key needed. Copy a brief, give it to the AI agent you already use, and paste the JSON it returns. For a job, open it in Today and press \"Brief: CV for the builder\"."),
+    h("div", { class: "row", style: "margin-top:6px" }, fromSaved, h("button", { onclick: guard(async () => { if (!fromSaved.value) throw new Error("Pick one of your saved CVs first."); copy((await api(`/cv-builds/brief?cv=${encodeURIComponent(fromSaved.value)}`)).brief); }) }, "Copy brief for my AI agent")),
+    h("div", { style: "margin-top:8px" }, pasted), h("div", { class: "row", style: "margin-top:6px" }, h("button", { onclick: guard(async () => {
+      const s = pasted.value, a = s.indexOf("{"), b = s.lastIndexOf("}"); if (a < 0 || b < a) throw new Error("That does not look like JSON. Paste the whole answer.");
+      let j; try { j = JSON.parse(s.slice(a, b + 1)); } catch { throw new Error("That JSON could not be read. Ask your agent to return only the JSON object."); }
+      cur.id = null; cur.data = fix(j); cur.name = cur.name || ""; drawForm(); preview(); pasted.value = ""; say("Loaded. Check every line against your real CV, then name it and save."); }) }, "Load it into the editor")), msg);
+  const editor = h("div", { class: "card" }, h("div", { class: "row" }, nameIn, h("button", { class: "primary", onclick: save }, "Save"), h("button", { onclick: download, title: "Prints the saved version" }, "Download PDF"),
+    h("button", { onclick: () => { const w = window.open(URL.createObjectURL(new Blob([lastHtml], { type: "text/html" })), "_blank", "noopener"); if (!w) say("The browser blocked the new tab.", true); }, title: "If no Chrome or Edge is found, print this page to PDF yourself" }, "Open printable page"),
+    h("button", { onclick: () => { cur.id = null; cur.name = (cur.name || "CV") + " copy"; nameIn.value = cur.name; say("Duplicated. Save it under its new name."); } }, "Duplicate"),
+    h("button", { class: "link danger", onclick: guard(async () => { if (cur.id === null) throw new Error("Nothing saved to delete."); await api(`/cv-builds/${cur.id}`, "DELETE"); builderOpen = null; render(); }) }, "Delete"), h("span", { class: "sp" }), fit),
+    h("div", { class: "builder", style: "margin-top:12px" }, formBox, h("div", { class: "prevwrap" }, frame)));
+  drawForm(); $app.replaceChildren(shell("builder", intro, editor)); if (builderOpen && builds.some(b => b.id === builderOpen)) await load(builderOpen); else preview();
+}
+
 // ---------- shell, router ----------
 function shell(active, ...body) {
   const tab = (k, label) => h("button", { class: active === k ? "on" : "", onclick: () => { location.hash = "#/" + k; } }, label);
-  return h("div", {}, h("header", {}, h("span", { class: "brand" }, BRAND), h("nav", {}, tab("today", "Today"), tab("tracker", "Tracker"), tab("insights", "Insights"), tab("profile", "My situation"), tab("settings", "Settings")), h("span", { class: "sp" }),
+  return h("div", {}, h("header", {}, h("span", { class: "brand" }, BRAND), h("nav", {}, tab("today", "Today"), tab("tracker", "Tracker"), tab("insights", "Insights"), tab("profile", "My situation"), tab("builder", "CV builder"), tab("settings", "Settings")), h("span", { class: "sp" }),
     h("span", { class: "tiny" }, state.me.user.email), h("button", { onclick: async () => { await api("/logout", "POST"); state.me = null; render(); } }, "Sign out"),
     h("button", { class: "link", onclick: () => { location.href = "/api/export"; } }, "Download my data")), ...body);
 }
@@ -508,7 +584,7 @@ async function render() {
     if (!state.me) { renderAuth(); return; }
     const route = (location.hash.replace("#/", "") || "today");
     if (!state.me.profile) { renderProfile(true); return; }
-    if (route === "profile") renderProfile(false); else if (route === "tracker") await renderTracker(); else if (route === "insights") await renderInsights(); else if (route === "settings") await renderSettings(); else await renderToday();
+    if (route === "profile") renderProfile(false); else if (route === "tracker") await renderTracker(); else if (route === "insights") await renderInsights(); else if (route === "settings") await renderSettings(); else if (route === "builder") await renderBuilder(); else await renderToday();
   } catch (e) { if (e.status === 401) { state.me = null; renderAuth(); } else $app.replaceChildren(h("div", { class: "card err" }, e.message)); }
 }
 async function boot() {

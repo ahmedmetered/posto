@@ -47,6 +47,7 @@ lives, default `data/`), `NO_SCHEDULER=1` (do not run the daily sweep from this 
 | **Why nothing matched** | When the feed is empty it says what blocks the postings whose titles match your role types ("108 are remote for other countries, 92 are full-time over your hours limit...") |
 | **Tracker** | Statuses, notes, which CV you sent, reply threads, top picks, "easy apply" marker |
 | **Email reply tracking** | Reads your inbox over IMAP (read-only), finds replies from companies you applied to, updates the status and attaches the email to the card. Italian and English. Uncertain matches go to a review list instead of being applied |
+| **CV builder** | Build a one-page, ATS-friendly CV from structured fields with a live preview and a fit check, and print it to PDF with the Chrome or Edge already on your machine. No LaTeX, no library. Start from a CV you saved or tailor one for a job through the AI agent you already use (copy a brief, paste back its JSON), then save it so it also counts when Posto compares your CVs with a job |
 | **CVs** | Upload `.docx`, `.pdf`, `.txt` or paste text. For every job it shows which of your CVs covers the posting best and which key terms are missing |
 | **AI tailoring (optional)** | Tailored summary, cover letter or gap list, grounded in your CV only. Anthropic, any OpenAI-compatible API, or a local model through Ollama so nothing leaves your machine. Or press "Brief" to copy the posting, your CV and the rules for the AI agent you already use (see `skills/tailor`) |
 | **Daily digest** | In the app, and optionally pushed to your phone via ntfy.sh, a Discord or Slack webhook |
@@ -106,6 +107,7 @@ It is designed for one person or a household on their own computer, not for the 
 | `src/eligibility.mjs`, `src/profile.mjs`, `src/geo.mjs` | Situation profile, location parsing, the decision |
 | `src/sources/index.mjs`, `src/sweep.mjs`, `src/boards.json` | Source adapters (parse functions tested against fixtures), ingest, per-user matching |
 | `src/mail/classify.mjs`, `src/mail/check.mjs` | Reply classification and matching (pure, tested) and the IMAP reader |
+| `src/cvbuild.mjs` | The CV builder: structured CV, escaped HTML, headless-browser PDF |
 | `src/cv.mjs`, `src/ai.mjs` | CV reading and comparison, optional AI tailoring |
 | `src/scheduler.mjs`, `src/digest.mjs` | Daily sweep and mail checks, digest and webhooks |
 | `src/server.mjs`, `src/auth.mjs`, `src/db.mjs`, `src/secrets.mjs` | HTTP API, accounts, SQLite schema, encryption |

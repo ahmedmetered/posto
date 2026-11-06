@@ -1,3 +1,5 @@
+import { BUILDER_RULES } from "./cvbuild.mjs";
+
 // Optional AI help for tailoring a CV or writing a cover letter. Off unless the user sets it up.
 // Works with Anthropic, any OpenAI-compatible endpoint (OpenAI, OpenRouter, ...), and local models (Ollama, LM Studio),
 // so a person can keep everything on their own machine. The keyword comparison in cv.mjs works without any of this.
@@ -36,6 +38,7 @@ const KINDS = {
   summary: { system: `You help a job seeker tailor their CV. ${RULES}`, ask: "Write a 3-4 line professional summary for the top of this CV, aimed at this job, then list up to 5 existing CV bullet points (quoted from the CV) that should be moved higher because they match the posting." },
   cover_letter: { system: `You write short, specific cover letters in the candidate's own voice. ${RULES}`, ask: "Write a cover letter of at most 180 words for this job. No generic openings, no flattery. Lead with the one or two most relevant things from the CV." },
   cv: { system: `You tailor a CV for one job posting. ${RULES} One page. Lead with evidence (shipped work, live products, repositories with tests). Mirror the posting's vocabulary only where it is true. Reframe, never invent. Keep dates, grades and numbers exact. If it will not fit, cut the weakest bullet, never the font size.`, ask: "Return the tailored CV as plain text, section by section, keeping the candidate's own wording wherever it already fits. Then, under the line TO TELL THE CANDIDATE, list anything the posting asks for that the CV does not show." },
+  cv_json: { system: `You tailor a CV for one job posting and return it as data for a CV builder. ${RULES}`, ask: `Tailor the CV to this job: lead with the evidence that matches it, mirror the posting's vocabulary only where it is true, cut what is least relevant. ${BUILDER_RULES}` },
   gaps: { system: `You give honest, practical CV feedback. ${RULES}`, ask: "List what the posting asks for that the CV does not show, and for each say whether it is a real gap or just missing from the wording. Then give 3 concrete edits to the CV." },
 };
 // the models a local Ollama has downloaded, so the settings page can offer them instead of a typed name

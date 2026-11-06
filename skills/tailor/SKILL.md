@@ -19,6 +19,8 @@ already have than add an API key, this skill is the other half.
 1. In Posto, open a job and press **Brief: tailor my CV**, **Brief: cover letter** or **Brief: what is missing**.
    The brief holds the posting, the CV that covers it best and the rules.
 2. Give the brief to your agent. Follow `references/tailoring.md`.
+2b. For **Brief: CV for the builder** (or a saved CV converted in the CV builder tab) the agent returns one JSON object. Paste it in the
+   CV builder tab, check every line against your real CV, save it, and download the one-page PDF.
 3. Read the result before using it. Anything the posting asks for that the CV does not show must be flagged, not claimed.
 
 ## Hard rules

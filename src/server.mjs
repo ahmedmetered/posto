@@ -13,6 +13,7 @@ import { parseLocation } from "./geo.mjs";
 import { matchUser, seedBoards, disabledFeeds, feedNames } from "./sweep.mjs";
 import { ADAPTERS } from "./sources/index.mjs";
 import { rankCvs, textFromUpload } from "./cv.mjs";
+import { cleanCv, emptyCv, renderCvHtml, cvToText, printPdf, convertBrief } from "./cvbuild.mjs";
 import { tailor, agentBrief, aiConfigFromInput, ollamaModels, AI_PROVIDERS, TAILOR_KINDS } from "./ai.mjs";
 import { accountConfig, accountFromInput, testLogin, checkMail } from "./mail/check.mjs";
 import { PROVIDERS } from "./mail/classify.mjs";
@@ -27,6 +28,7 @@ const STATUSES = ["Found", "Ready to send", "Applied", "Replied", "Interviewing"
 const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png", ".woff2": "font/woff2", ".ico": "image/x-icon" };
 const today = () => new Date().toISOString().slice(0, 10);
 const cap = (v, n) => String(v ?? "").slice(0, n);
+const J = (v, d) => { try { return v ? JSON.parse(v) : d; } catch { return d; } };
 
 export function createApp(db, { secureCookies = false, aiFetch = fetch } = {}) {
   seedBoards(db);
@@ -307,6 +309,38 @@ export function createApp(db, { secureCookies = false, aiFetch = fetch } = {}) {
       if (method === "DELETE") { db.prepare("DELETE FROM cvs WHERE id = ?").run(row.id); return sendJson(res, 200, { ok: true }); }
     }
 
+    // ---- CV builder: a structured CV, a live preview, a one-page PDF, and the text copy that the job comparison uses
+    const buildRow = r => ({ id: r.id, name: r.name, job_id: r.job_id, updated_at: r.updated_at, data: cleanCv(J(r.data_json, {})) });
+    if (p === "/api/cv-builds" && method === "GET") return sendJson(res, 200, { builds: db.prepare("SELECT id, name, job_id, updated_at FROM cv_builds WHERE user_id = ? ORDER BY updated_at DESC").all(user.id), blank: emptyCv() });
+    if (p === "/api/cv-builds" && method === "PUT") {
+      const name = cap(body.name, 80).trim(); if (!name) throw auth.httpErr(400, "Give the CV a name, for example \"Product EN\".");
+      const data = cleanCv(body.data), jobId = Number.isInteger(+body.job_id) && +body.job_id > 0 ? +body.job_id : null, t = now(), text = cvToText(data);
+      if (!data.name && !data.experience.length) throw auth.httpErr(400, "Add at least your name and one role first.");
+      const same = body.id ? db.prepare("SELECT id, name FROM cv_builds WHERE id = ? AND user_id = ?").get(+body.id, user.id) : null;
+      if (same && same.name !== name) db.prepare("DELETE FROM cvs WHERE user_id = ? AND name = ? AND filename = 'built here'").run(user.id, ("Built: " + same.name).slice(0, 80));
+      if (same) db.prepare("UPDATE cv_builds SET name = ?, job_id = ?, data_json = ?, updated_at = ? WHERE id = ?").run(name, jobId, JSON.stringify(data), t, same.id);
+      else db.prepare("INSERT INTO cv_builds (user_id, name, job_id, data_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(user_id, name) DO UPDATE SET job_id = excluded.job_id, data_json = excluded.data_json, updated_at = excluded.updated_at").run(user.id, name, jobId, JSON.stringify(data), t, t);
+      const row = db.prepare("SELECT * FROM cv_builds WHERE user_id = ? AND name = ?").get(user.id, name);
+      if (text.length >= 20) db.prepare("INSERT INTO cvs (user_id, name, text, filename, created_at, updated_at) VALUES (?, ?, ?, 'built here', ?, ?) ON CONFLICT(user_id, name) DO UPDATE SET text = excluded.text, filename = excluded.filename, updated_at = excluded.updated_at").run(user.id, ("Built: " + name).slice(0, 80), text, t, t);
+      return sendJson(res, 200, buildRow(row));
+    }
+    if (p === "/api/cv-builds/brief" && method === "GET") { // turn one of your saved CVs into builder data with your own AI agent
+      const cv = db.prepare("SELECT text FROM cvs WHERE user_id = ? AND name = ?").get(user.id, String(url.searchParams.get("cv") || ""));
+      if (!cv || !cv.text) throw auth.httpErr(400, "Pick one of your saved CVs first.");
+      return sendJson(res, 200, { brief: convertBrief(cv.text) });
+    }
+    if (p === "/api/cv-render" && method === "POST") { const data = cleanCv(body.data); return sendJson(res, 200, { html: renderCvHtml(data, { pt: body.pt }), text: cvToText(data) }); }
+    if ((m = p.match(/^\/api\/cv-builds\/(\d+)(\/pdf)?$/))) {
+      const row = db.prepare("SELECT * FROM cv_builds WHERE id = ? AND user_id = ?").get(+m[1], user.id); if (!row) throw auth.httpErr(404, "Not found.");
+      if (method === "DELETE" && !m[2]) { db.prepare("DELETE FROM cv_builds WHERE id = ?").run(row.id); db.prepare("DELETE FROM cvs WHERE user_id = ? AND name = ? AND filename = 'built here'").run(user.id, ("Built: " + row.name).slice(0, 80)); return sendJson(res, 200, { ok: true }); }
+      if (method === "GET" && !m[2]) return sendJson(res, 200, buildRow(row));
+      if (method === "GET" && m[2]) {
+        let out; try { out = await printPdf(renderCvHtml(J(row.data_json, {}), { pt: url.searchParams.get("pt") })); } catch (e) { throw auth.httpErr(e.status || 502, e.message); }
+        res.writeHead(200, { "content-type": "application/pdf", "content-disposition": `attachment; filename="${row.name.replace(/[^A-Za-z0-9._-]+/g, "_").slice(0, 60) || "cv"}.pdf"`, "x-cv-pages": String(out.pages), "access-control-expose-headers": "x-cv-pages", "cache-control": "no-store" });
+        return res.end(out.pdf);
+      }
+    }
+
     // ---- mailbox connection and checks
     if (p === "/api/mail" && method === "GET") return sendJson(res, 200, mailState(user.id));
     if (p === "/api/mail" && method === "PUT") {
@@ -393,7 +427,7 @@ export function createApp(db, { secureCookies = false, aiFetch = fetch } = {}) {
     if (p === "/api/insights" && method === "GET") return sendJson(res, 200, insights(user.id));
     if (p === "/api/export" && method === "GET") {
       const out = { exported_at: now(), user, profile: db.prepare("SELECT json FROM profiles WHERE user_id = ?").get(user.id)?.json ? JSON.parse(db.prepare("SELECT json FROM profiles WHERE user_id = ?").get(user.id).json) : null,
-        applications: db.prepare("SELECT * FROM applications WHERE user_id = ?").all(user.id), cvs: db.prepare("SELECT name, filename, text FROM cvs WHERE user_id = ?").all(user.id), messages: db.prepare("SELECT m.* FROM messages m JOIN applications a ON a.id = m.application_id WHERE a.user_id = ?").all(user.id) };
+        applications: db.prepare("SELECT * FROM applications WHERE user_id = ?").all(user.id), cvs: db.prepare("SELECT name, filename, text FROM cvs WHERE user_id = ?").all(user.id), cv_builds: db.prepare("SELECT name, data_json FROM cv_builds WHERE user_id = ?").all(user.id).map(r => ({ name: r.name, data: JSON.parse(r.data_json) })), messages: db.prepare("SELECT m.* FROM messages m JOIN applications a ON a.id = m.application_id WHERE a.user_id = ?").all(user.id) };
       return sendJson(res, 200, out, { "content-disposition": 'attachment; filename="my-data.json"' });
     }
     if (p === "/api/account/delete" && method === "POST") {
