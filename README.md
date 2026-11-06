@@ -2,6 +2,8 @@
 
 *Posto* is Italian for a place, a seat, a job.
 
+![Posto: today's jobs as visa pages, each with a stamped verdict and the reasons](docs/today.jpg)
+
 An open-source job search assistant that runs on your own computer. It finds jobs **you can actually apply to**,
 given your real situation, then tracks your applications and reads your inbox for the replies.
 
@@ -14,6 +16,8 @@ You find out after reading the whole posting, or after applying. This project ch
 - **No runtime dependencies** for the core (Node's built-in SQLite, `fetch` and `crypto`). Email checking uses two optional packages.
 - **Explainable.** Every blocked or flagged job carries a sentence saying what is wrong with it.
 - **Built for different situations**: a student with an hours cap, someone relocating who needs sponsorship, a remote-only freelancer.
+
+![Posto sign-in screen](docs/sign-in.jpg)
 
 ## Quick start
 
