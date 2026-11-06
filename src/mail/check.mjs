@@ -2,7 +2,7 @@
 // imapflow and mailparser are optional dependencies: if they are missing the rest of the app still works.
 //
 // Strong matches (the sender's domain or the subject names the company) change the status and add the email to the
-// application's thread. Everything uncertain goes to the "review" list instead of being applied.
+// application's thread. When one company has several roles and the mail does not say which, the most likely one (a role still in play) is updated and the note says it was matched by company only. Mail that only mentions a company is ignored.
 import { now } from "../db.mjs";
 import { decrypt } from "../secrets.mjs";
 import { classify, matchEmail, decide, bodyOf, cleanBody, detectProvider, PROVIDERS } from "./classify.mjs";
@@ -46,12 +46,19 @@ export async function testLogin(cfg) {
 export function applyMail(db, userId, mail, { skip = [], dryRun = false } = {}) {
   const apps = db.prepare("SELECT id, company, role, status, notes FROM applications WHERE user_id = ?").all(userId);
   const m = { from: mail.from, subject: mail.subject, body: bodyOf(mail), clean: cleanBody(mail), date: (mail.date || new Date()).toISOString().slice(0, 10) };
-  const match = matchEmail(m, apps);
+  let match = matchEmail(m, apps), guessed = false;
+  // Several roles at one company and the mail does not say which: act on the most likely one (a role still in play, the most
+  // recently touched) and say so in the note. Nothing is queued for the user to sort out.
+  if (match.kind === "ambiguous" && match.sameCompany) {
+    const live = a => (["Applied", "Replied", "Interviewing", "Ready to send"].includes(a.status) ? 1 : 0);
+    const best = [...match.apps].sort((x, y) => live(y) - live(x) || y.id - x.id)[0];
+    match = { kind: "strong", app: best }; guessed = true;
+  }
   if (match.app && skip.some(s => (match.app.company || "").toLowerCase().includes(s.toLowerCase()))) return { outcome: "ignored" };
   if (match.kind === "none") return { outcome: "ignored" };
   const kind = classify(m.subject, m.body);
   if (kind === "other") return { outcome: "ignored" }; // not a reply: newsletters, job alerts, account mail
-  if (kind === "ack" && match.kind !== "strong") return { outcome: "ignored" }; // an acknowledgement we cannot place is not worth a review
+  if (match.kind !== "strong") return { outcome: "ignored" }; // a mail that only mentions a company, or fits several companies, is not acted on
   if (match.kind === "strong" && kind !== "other") {
     const next = decide(kind, match.app);
     if (dryRun) return { outcome: "strong", kind, app: match.app, change: next ? `${match.app.status} -> ${next}` : "no change" };
@@ -62,16 +69,12 @@ export function applyMail(db, userId, mail, { skip = [], dryRun = false } = {}) 
       if (ins.changes) db.prepare("UPDATE applications SET unread = unread + 1, updated = ? WHERE id = ?").run(now(), match.app.id);
     }
     if (next) {
-      const note = `${match.app.notes ? match.app.notes + " | " : ""}Email ${m.date} (${kind}): ${clip(m.subject, 80)}`;
+      const note = `${match.app.notes ? match.app.notes + " | " : ""}Email ${m.date} (${kind}${guessed ? ", matched by company only: check it is this role" : ""}): ${clip(m.subject, 80)}`;
       db.prepare("UPDATE applications SET status = ?, notes = ?, updated = ?, date_applied = CASE WHEN ? = 'Applied' AND date_applied = '' THEN ? ELSE date_applied END WHERE id = ?")
         .run(next, clip(note, 4000), now(), next, m.date, match.app.id);
     }
     return { outcome: "applied", kind, app: match.app, change: next ? `${match.app.status} -> ${next}` : "no change" };
   }
-  const hint = match.app ? `${match.app.company} - ${match.app.role}` : (match.candidates || []).join(" / ");
-  if (!dryRun) db.prepare("INSERT INTO mail_review (user_id, date, sender, subject, kind, match, hint, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
-    .run(userId, m.date, clip(m.from, 200), clip(m.subject, 200), kind, match.kind, clip(hint, 300), now());
-  return { outcome: "review", kind, match: match.kind, hint };
 }
 
 export async function checkMail(db, userId, { days = 3, dryRun = false, rescan = false, log = () => {} } = {}) {
@@ -88,7 +91,6 @@ export async function checkMail(db, userId, { days = 3, dryRun = false, rescan =
     try { for (const b of await client.list()) if (b.specialUse === "\\Junk" && !boxes.includes(b.path)) boxes.push(b.path); } catch { /* no junk folder */ }
     const since = new Date(Date.now() - days * 864e5);
     const seenRows = rescan ? new Set() : new Set(db.prepare("SELECT msg_id FROM mail_seen WHERE user_id = ?").all(userId).map(r => r.msg_id)); // rescan: look at mail again even if it was seen before (status changes are idempotent)
-    if (rescan && !dryRun) db.prepare("DELETE FROM mail_review WHERE user_id = ?").run(userId);
     const markSeen = db.prepare("INSERT OR IGNORE INTO mail_seen (user_id, msg_id) VALUES (?, ?)");
     for (const box of boxes) {
       const lock = await client.getMailboxLock(box, { readOnly: true }); // read-only: nothing is flagged, moved or deleted
@@ -105,7 +107,7 @@ export async function checkMail(db, userId, { days = 3, dryRun = false, rescan =
           mail.messageId = id;
           const r = applyMail(db, userId, { from: mail.from?.text || "", subject: mail.subject || "", text: mail.text || "", html: mail.html || "", date: mail.date, messageId: id }, { skip: cfg.skip, dryRun });
           if (r.outcome === "applied" || r.outcome === "strong") { if (r.change !== "no change") result.applied.push(`${r.app.company}: ${r.change}`); }
-          else if (r.outcome === "review") result.review++; else result.ignored++;
+          else result.ignored++;
           if (!dryRun) markSeen.run(userId, id);
         }
       } finally { lock.release(); }

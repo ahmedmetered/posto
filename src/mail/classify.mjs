@@ -71,7 +71,7 @@ export function matchEmail(mail, apps) {
     const text = `${mail.subject || ""} ${(mail.body || "").slice(0, 1500)}`.toLowerCase();
     const scored = pick.map(h => ({ h, s: roleWords(h.app.role).filter(w => text.includes(w)).length / Math.max(1, roleWords(h.app.role).length) })).sort((a, b) => b.s - a.s);
     if (scored[0].s >= 0.6 && scored[0].s > scored[1].s) return { kind: "strong", app: scored[0].h.app };
-    return { kind: "ambiguous", candidates: pick.map(h => `${h.app.company} - ${h.app.role}`) };
+    return { kind: "ambiguous", candidates: pick.map(h => `${h.app.company} - ${h.app.role}`), apps: pick.map(h => h.app), sameCompany: true };
   }
   return { kind: "strong", app: pick[0].app };
 }

@@ -141,7 +141,7 @@ const h = (tag, attrs, ...kids) => {
     else if (k === "checked") e.checked = !!v;
     else e.setAttribute(k, v === true ? "" : v);
   }
-  for (const c of kids.flat()) if (c != null && c !== false) e.append(c.nodeType ? c : document.createTextNode(String(c)));
+  for (const c of kids.flat(Infinity)) if (c != null && c !== false) e.append(c.nodeType ? c : document.createTextNode(String(c)));
   return e;
 };
 const BRAND = "Posto"; // the one place the product name lives
@@ -359,7 +359,7 @@ async function renderTracker() {
   const pipeline = h("nav", { class: "segs", "aria-label": "Pipeline stages" }, h("button", { class: !tf.status ? "on" : "", onclick: () => { tf.status = ""; redraw(); } }, `All ${apps.length}`),
     d.statuses.filter(s => counts[s]).map(s => h("button", { class: tf.status === s ? "on" : "", onclick: () => { tf.status = tf.status === s ? "" : s; redraw(); } }, `${s} ${counts[s]}`)));
   const active = Object.entries(tf).some(([k, v]) => v && v !== TF_DEFAULT[k]);
-  const visible = shown.slice(0, shownLimit);
+  const flat = !!(tf.sort || tf.status), visible = flat ? shown.slice(0, shownLimit) : shown; // grouped by stage shows every card; flat lists page in 60s
   const body = tf.sort || tf.status
     ? h("div", { class: "cols" }, visible.map(card))
     : d.statuses.map(s => { const list = visible.filter(a => a.status === s); return list.length ? h("div", {}, h("h3", {}, `${s} (${shown.filter(a => a.status === s).length})`), h("div", { class: "cols" }, list.map(card))) : null; });
@@ -412,7 +412,7 @@ const field = (label, input, hint) => h("div", {}, h("label", {}, label), input,
 const fileToBase64 = f => new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(",")[1] || ""); r.onerror = () => no(new Error("Could not read the file.")); r.readAsDataURL(f); });
 
 async function renderSettings() {
-  const [s, mail, cvd, review] = await Promise.all([api("/settings"), api("/mail"), api("/cvs"), api("/mail/review")]);
+  const [s, mail, cvd] = await Promise.all([api("/settings"), api("/mail"), api("/cvs")]);
   const msg = h("div", { class: "stickymsg" });
   const say = (t, bad) => { msg.textContent = t; msg.style.color = bad ? "var(--bad)" : "var(--ink-2)"; };
   const guard = fn => async () => { try { await fn(); } catch (e) { say(e.message, true); } };
@@ -436,7 +436,7 @@ async function renderSettings() {
   const helpEl = h("div", { class: "tiny", style: "margin-top:6px" }, mail.providers[mail.provider || "gmail"].help);
   M.user.addEventListener("change", () => { const d = M.user.value.split("@")[1] || ""; const pick = /icloud|me\.com|mac\.com/.test(d) ? "icloud" : /gmail|googlemail/.test(d) ? "gmail" : /outlook|hotmail|live|msn/.test(d) ? "outlook" : /yahoo/.test(d) ? "yahoo" : null; if (pick) { M.provider.value = pick; M.provider.dispatchEvent(new Event("change")); } });
   const mailBody = () => ({ provider: M.provider.value, user: M.user.value, password: M.password.value, host: M.host.value, port: +M.port.value, folders: M.folders.value, skip: M.skip.value });
-  const showResult = r => say(`Read ${r.scanned} new emails: ${r.applied.length ? r.applied.join("; ") : "no status changes"}${r.review ? `, ${r.review} to review` : ""}.`);
+  const showResult = r => say(`Read ${r.scanned} new emails: ${r.applied.length ? r.applied.join("; ") : "no status changes"}.`);
   const mailCard = h("div", { class: "card" }, h("h2", {}, "Email: update my tracker from replies"),
     h("p", { class: "muted", style: "margin-bottom:8px" }, "Reads your inbox (read-only: nothing is moved, flagged or deleted), finds replies from companies you applied to, and updates the status. Uncertain matches are listed for you instead of applied. Use an app password, not your normal password; it is stored encrypted on this computer."),
     h("div", { class: "grid" }, field("Provider", M.provider), field("Email address", M.user), field("App password", M.password), field("IMAP host", M.host), field("Port", M.port), field("Folders to read", M.folders), field("Ignore these companies", M.skip)), helpEl,
@@ -444,11 +444,10 @@ async function renderSettings() {
       mail.configured ? [h("button", { onclick: guard(async () => { say("Logging in..."); const r = await api("/mail/test", "POST"); say("Login works. Folders: " + r.folders.slice(0, 8).join(", ")); }) }, "Test login"),
         h("button", { onclick: guard(async () => { say("Reading mail (dry run, changes nothing)..."); showResult(await api("/mail/check", "POST", { days: 14, dryRun: true })); }) }, "Preview last 14 days"),
         h("button", { onclick: guard(async () => { say("Reading mail..."); showResult(await api("/mail/check", "POST", { days: 14 })); render(); }) }, "Check now"),
-        h("button", { title: "Reads the last 60 days again, including emails seen before, and rebuilds the list below", onclick: guard(async () => { say("Re-reading 60 days of mail, this takes a minute..."); showResult(await api("/mail/check", "POST", { days: 60, rescan: true })); }) }, "Re-scan 60 days"),
+        h("button", { title: "Reads the last 60 days again, including emails seen before", onclick: guard(async () => { say("Re-reading 60 days of mail, this takes a minute..."); showResult(await api("/mail/check", "POST", { days: 60, rescan: true })); }) }, "Re-scan 60 days"),
         h("button", { class: "link danger", onclick: guard(async () => { await api("/mail", "DELETE"); render(); }) }, "Disconnect")] : null),
     mail.configured && mail.last_check ? h("p", { class: "tiny", style: "margin-top:8px" }, "Last check " + ago(mail.last_check) + (mail.last_error ? " failed: " + mail.last_error : mail.last_result ? `: read ${mail.last_result.scanned}, ${mail.last_result.applied.length} updates` : "")) : null,
-    review.items.length ? h("div", {}, h("h3", {}, `Emails I was not sure about (${review.items.length})`), h("table", {}, review.items.slice(0, 15).map(r => h("tr", {}, h("td", { class: "tiny" }, r.date), h("td", {}, r.subject || "(no subject)", h("div", { class: "tiny" }, r.sender)), h("td", { class: "tiny" }, `${r.kind} · ${r.match}${r.hint ? " · " + r.hint : ""}`)))),
-      h("button", { class: "link", onclick: guard(async () => { await api("/mail/review", "DELETE"); render(); }) }, "Clear this list")) : null);
+    null);
 
   // --- schedule and notifications
   const S = { on: h("input", { type: "checkbox", checked: s.schedule.enabled }), hour: h("select", {}, Array.from({ length: 24 }, (_, i) => h("option", { value: i, selected: i === s.schedule.hour }, String(i).padStart(2, "0") + ":00"))),

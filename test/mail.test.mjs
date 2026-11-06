@@ -43,7 +43,7 @@ test("cleanBody drops links and footers", () => {
   assert.match(out, /will not move forward/); assert.doesNotMatch(out, /https|receiving/);
 });
 
-test("applyMail updates the status, stores the thread once, and sends doubtful mail to review", () => {
+test("applyMail updates the status, stores the thread once, and resolves several roles at one company", () => {
   const db = openDb(":memory:"), uid = signup(db, "a@example.com", "correct horse battery");
   const add = (company, status) => Number(db.prepare("INSERT INTO applications (user_id, company, role, status, added, updated) VALUES (?, ?, 'PM', ?, 'x', 'x')").run(uid, company, status).lastInsertRowid);
   const a = add("Acme", "Applied"), b = add("Globex", "Applied"), c = add("Globex", "Applied");
@@ -55,9 +55,11 @@ test("applyMail updates the status, stores the thread once, and sends doubtful m
   assert.equal(row.status, "Rejected"); assert.equal(row.unread, 1);
   assert.equal(db.prepare("SELECT COUNT(*) n FROM messages WHERE application_id = ?").get(a).n, 1);
   const amb = applyMail(db, uid, { from: "x@globex.com", subject: "Colloquio", text: "ciao, colloquio domani", html: "", date: new Date(), messageId: "<2@g>" });
-  assert.equal(amb.outcome, "review");
-  assert.equal(db.prepare("SELECT status FROM applications WHERE id IN (?, ?)").all(b, c).every(r => r.status === "Applied"), true);
-  assert.equal(db.prepare("SELECT COUNT(*) n FROM mail_review WHERE user_id = ?").get(uid).n, 1);
+  assert.equal(amb.outcome, "applied", "two Globex roles, the mail names neither: the most recent live one is updated");
+  assert.equal(db.prepare("SELECT status FROM applications WHERE id = ?").get(c).status, "Interviewing");
+  assert.equal(db.prepare("SELECT status FROM applications WHERE id = ?").get(b).status, "Applied");
+  assert.match(db.prepare("SELECT notes FROM applications WHERE id = ?").get(c).notes, /matched by company only/);
+  assert.equal(db.prepare("SELECT COUNT(*) n FROM mail_review WHERE user_id = ?").get(uid).n, 0, "nothing is queued for the user");
 });
 
 test("mailbox passwords are encrypted at rest", () => {
