@@ -67,3 +67,24 @@ test("extension token: created once, works from another origin, checks and saves
     assert.equal((await s.call("GET", "/api/ext/ping", null, ext)).status, 401);
   } finally { s.close(); }
 });
+
+test("a second token (for a daily script) can list tracked jobs and bulk-add new ones, skipping what is already there", async () => {
+  const s = await boot();
+  try {
+    await s.call("POST", "/api/signup", { email: "a@example.com", password: "correct horse battery" });
+    const uid = s.db.prepare("SELECT id FROM users").get().id;
+    const { token } = (await s.call("POST", "/api/token")).json;
+    const crypto = await import("node:crypto"), other = "jst_" + crypto.randomBytes(24).toString("base64url");
+    s.db.prepare("INSERT INTO settings (user_id, k, v) VALUES (?, 'api_token_sweep', ?)").run(uid, crypto.createHash("sha256").update(other).digest("hex"));
+    const h = { authorization: "Bearer " + other, origin: "http://localhost" };
+    assert.equal((await s.call("GET", "/api/ext/ping", null, h)).status, 200);
+    assert.equal((await s.call("GET", "/api/ext/ping", null, { authorization: "Bearer " + token })).status, 200, "the extension token still works");
+    const jobs = [{ company: "Acme", role: "Product Owner", url: "https://x/1", source: "LinkedIn", mode: "Hybrid", type: "Internship", cv: "Product EN PDF", top: true, easy: true, notes: "Morning sweep", location: "Milan" },
+      { company: "Acme", role: "product owner", url: "https://x/other" }, { company: "Globex", role: "QA", url: "javascript:alert(1)" }, { company: "", role: "x" }];
+    const r = (await s.call("POST", "/api/ext/bulk", { jobs }, h)).json; assert.deepEqual([r.added, r.skipped, r.invalid], [2, 1, 1]);
+    const list = (await s.call("GET", "/api/ext/applications", null, h)).json.applications;
+    const acme = list.find(a => a.company === "Acme"); assert.equal(acme.mode, "Hybrid"); assert.equal(acme.top, true); assert.equal(acme.easy, true); assert.equal(acme.cv, "Product EN PDF");
+    assert.equal(list.find(a => a.company === "Globex").url, "");
+    assert.equal((await s.call("POST", "/api/ext/bulk", { jobs }, h)).json.added, 0, "posting the same batch twice adds nothing");
+  } finally { s.close(); }
+});

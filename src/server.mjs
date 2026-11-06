@@ -100,7 +100,7 @@ export function createApp(db, { secureCookies = false, aiFetch = fetch } = {}) {
   const CORS = { "access-control-allow-origin": "*", "access-control-allow-headers": "authorization, content-type", "access-control-allow-methods": "GET, POST, OPTIONS" };
   const tokenHash = t => crypto.createHash("sha256").update(t).digest("hex");
   async function extensionApi(req, res, p, method, token) {
-    const row = db.prepare("SELECT u.id, u.email FROM settings s JOIN users u ON u.id = s.user_id WHERE s.k = 'api_token' AND s.v = ?").get(tokenHash(token));
+    const row = db.prepare("SELECT u.id, u.email FROM settings s JOIN users u ON u.id = s.user_id WHERE s.k LIKE 'api_token%' AND s.v = ?").get(tokenHash(token));
     const send = (status, body) => sendJson(res, status, body, CORS);
     if (!row) return send(401, { error: "This token is not valid. Create a new one in Settings." });
     if (p === "/api/ext/ping" && method === "GET") return send(200, { ok: true, email: row.email });
@@ -118,6 +118,30 @@ export function createApp(db, { secureCookies = false, aiFetch = fetch } = {}) {
       const id = db.prepare("INSERT INTO applications (user_id, company, role, url, status, cv, location, easy, notes, mode, type, source, added, updated) VALUES (?, ?, ?, ?, 'Found', ?, ?, ?, ?, ?, ?, ?, ?, ?)")
         .run(row.id, company || "(unknown)", title, url, cv, cap(b.location, 120), easy, cap(b.source ? `Saved from ${b.source}` : "", 200), modeOf(job.location, job.remote), typeOf(job), cap(b.source, 80), t, t).lastInsertRowid;
       return send(201, { id: Number(id), existing: false, result });
+    }
+    if (p === "/api/ext/applications" && method === "GET") { // everything tracked, so an outside script can skip what is already there
+      const rows = db.prepare("SELECT id, company, role, url, status, source, cv, mode, type, location, salary, top, easy, notes, added, updated, date_applied AS date, unread FROM applications WHERE user_id = ?").all(row.id);
+      return send(200, { applications: rows.map(a => ({ ...a, top: !!a.top, easy: !!a.easy })) });
+    }
+    if (p === "/api/ext/bulk" && method === "POST") { // add many jobs at once; a job already tracked (same link, or same company and role) is skipped
+      const b = await readBody(req, 4e6), list = (Array.isArray(b.jobs) ? b.jobs : Array.isArray(b.apps) ? b.apps : []).slice(0, 500);
+      const have = db.prepare("SELECT url, lower(company) c, lower(role) r FROM applications WHERE user_id = ?").all(row.id);
+      const urls = new Set(have.map(h => h.url).filter(Boolean)), keys = new Set(have.map(h => h.c + "|" + h.r));
+      const ins = db.prepare("INSERT INTO applications (user_id, company, role, url, status, cv, notes, salary, location, mode, type, source, top, easy, added, updated) VALUES (?, ?, ?, ?, 'Found', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+      let added = 0, skipped = 0, invalid = 0; const t = now();
+      db.exec("BEGIN");
+      try {
+        for (const j of list) {
+          const company = cap(j.company, 120).trim(), role = cap(j.role || j.title, 160).trim(), url = /^https?:\/\//i.test(j.url || "") ? cap(j.url, 600) : "";
+          if (!company || !role) { invalid++; continue; }
+          const key = company.toLowerCase() + "|" + role.toLowerCase();
+          if ((url && urls.has(url)) || keys.has(key)) { skipped++; continue; }
+          ins.run(row.id, company, role, url, cap(j.cv, 80), cap(j.notes, 4000), cap(j.salary, 80), cap(j.location, 120), cap(j.mode, 30), cap(j.type, 30), cap(j.source, 80), j.top ? 1 : 0, j.easy ? 1 : 0, t, t);
+          if (url) urls.add(url); keys.add(key); added++;
+        }
+        db.exec("COMMIT");
+      } catch (e) { db.exec("ROLLBACK"); throw e; }
+      return send(200, { added, skipped, invalid });
     }
     return send(404, { error: "Not found." });
   }
