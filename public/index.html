@@ -3,52 +3,115 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Job search agent</title>
+<title>Posto</title>
 <style>
-  :root { --bg:#F5F5F7; --surface:#fff; --ink:#1D1D1F; --ink-2:#6E6E73; --ink-3:#86868B; --line:#D2D2D7; --soft:#E8E8ED; --accent:#0071E3; --accent-soft:rgba(0,113,227,.1);
-    --good:#1D7A36; --good-bg:#E6F4EA; --warn:#946A00; --warn-bg:#FFF3C9; --bad:#D70015; --bad-bg:#FCE9EA; --r:14px; }
-  @media (prefers-color-scheme: dark) { :root { --bg:#0A0A0C; --surface:#17171A; --ink:#F5F5F7; --ink-2:#A1A1A6; --ink-3:#8E8E93; --line:#38383D; --soft:#2A2A2E; --accent:#0A84FF; --accent-soft:rgba(10,132,255,.18);
-    --good:#30D158; --good-bg:rgba(48,209,88,.14); --warn:#FFD60A; --warn-bg:rgba(255,214,10,.12); --bad:#FF453A; --bad-bg:rgba(255,69,58,.14); } }
+  @font-face { font-family:"Bricolage Grotesque"; src:url(/fonts/bricolage.woff2) format("woff2"); font-weight:400 800; font-display:swap; }
+  @font-face { font-family:"Courier Prime"; src:url(/fonts/courier-prime.woff2) format("woff2"); font-weight:400; font-display:swap; }
+  @font-face { font-family:"Courier Prime"; src:url(/fonts/courier-prime-bold.woff2) format("woff2"); font-weight:700; font-display:swap; }
+  /* Posto: a customs hall. Cobalt desk, guilloche visa pages, inked stamps. One theme by design. */
+  :root { --desk:#2B35FF; --desk-deep:#1B22C9; --page:#F4F2FF; --page-2:#E7E4FF; --ink:#14143A; --ink-2:#4A4A7A; --ink-3:#5E5E8E; --line:#C9C5F2;
+    --on-desk:#fff; --on-desk-2:#C9CCFF; --yellow:#FFD400; --good:#00875A; --warn:#C2470A; --bad:#D4002A; --violet:#5B2BE0; --r:6px;
+    --type:"Bricolage Grotesque","Segoe UI",system-ui,sans-serif; --typed:"Courier Prime","Courier New",monospace; --out:cubic-bezier(.16,1,.3,1); }
   * { box-sizing:border-box; margin:0; padding:0; }
-  body { font:15px/1.47 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,Helvetica,Arial,sans-serif; background:var(--bg); color:var(--ink); padding:20px 16px 80px; }
-  .wrap { max-width:920px; margin:0 auto; }
-  h1 { font-size:22px; font-weight:700; } h2 { font-size:17px; margin-bottom:10px; } h3 { font-size:14px; margin:14px 0 6px; color:var(--ink-2); font-weight:600; }
-  header { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:18px; }
+  html { scrollbar-color:var(--yellow) var(--desk-deep); scrollbar-width:thin; }
+  body { font:15px/1.5 var(--type); background:var(--desk); color:var(--on-desk); padding:22px 18px 90px; min-height:100vh;
+    background-image:radial-gradient(1200px 520px at 50% -10%, rgba(255,255,255,.14), transparent 70%); background-repeat:no-repeat; caret-color:var(--violet); }
+  ::selection { background:var(--yellow); color:var(--ink); }
+  :focus-visible { outline:3px solid var(--yellow); outline-offset:2px; box-shadow:0 0 0 5px var(--ink); border-radius:var(--r); }
+  .wrap { max-width:1080px; margin:0 auto; }
+  h1, h2, h3 { font-family:var(--type); letter-spacing:-.01em; text-wrap:balance; }
+  h2 { font-size:19px; font-weight:700; margin-bottom:8px; }
+  h3 { font-size:13px; margin:22px 0 10px; font-weight:700; letter-spacing:.14em; text-transform:uppercase; color:var(--on-desk); }
+  .card h3 { color:var(--ink-2); margin:16px 0 6px; }
+
+  /* masthead: the wordmark is a rubber stamp, the sections are page-edge tabs */
+  header { display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin-bottom:26px; }
   header .sp { flex:1; }
-  nav { display:flex; gap:6px; flex-wrap:wrap; }
-  button, .btn { font:inherit; font-size:14px; background:var(--surface); color:var(--ink); border:1px solid var(--line); border-radius:980px; padding:7px 15px; cursor:pointer; }
-  button:hover { border-color:var(--ink-3); } button:disabled { opacity:.5; cursor:default; }
-  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600; }
-  button.on { background:var(--ink); border-color:var(--ink); color:var(--surface); font-weight:600; }
-  button.danger { color:var(--bad); }
-  button.link { border:0; background:none; color:var(--accent); padding:0 4px; }
-  .card { background:var(--surface); border-radius:var(--r); padding:16px; margin-bottom:12px; }
+  .brand { font:800 22px/1 var(--type); letter-spacing:.16em; text-transform:uppercase; color:var(--yellow); border:3px double var(--yellow); border-radius:4px; padding:7px 12px 6px 14px; transform:rotate(-3deg); display:inline-block; }
+  nav { display:flex; gap:4px; flex-wrap:wrap; }
+  header .tiny { color:var(--on-desk-2); }
+  button, .btn { font:600 13.5px/1 var(--type); letter-spacing:.04em; background:transparent; color:var(--ink); border:2px solid var(--ink); border-radius:4px; padding:9px 14px; cursor:pointer; text-decoration:none; display:inline-block;
+    transition:transform .18s var(--out), background-color .18s, color .18s; }
+  button:hover, .btn:hover { background:var(--ink); color:var(--page); transform:rotate(-1.2deg); }
+  button:active, .btn:active { transform:scale(.94) rotate(1deg); }
+  button:disabled { opacity:.5; cursor:default; transform:none; }
+  button.primary { background:var(--ink); color:var(--page); }
+  button.primary:hover { background:var(--violet); border-color:var(--violet); }
+  button.danger { color:var(--bad); border-color:var(--bad); } button.danger:hover { background:var(--bad); color:#fff; }
+  button.link { border:0; background:none; padding:4px 6px; text-decoration:underline; text-underline-offset:3px; text-decoration-thickness:2px; color:var(--violet); }
+  button.link:hover { background:none; color:var(--ink); transform:none; } button.link.danger { color:var(--bad); }
+  header button, .on-desk button, .segs button { color:var(--on-desk); border-color:rgba(255,255,255,.45); }
+  header button:hover, .segs button:hover { background:var(--on-desk); color:var(--desk); border-color:var(--on-desk); }
+  header button.link { color:var(--on-desk-2); border:0; } header button.link:hover { color:var(--yellow); background:none; }
+  nav button { border-radius:8px 8px 0 0; border-width:2px 2px 0; padding:10px 14px 8px; background:rgba(255,255,255,.1); }
+  button.on, header button.on, .segs button.on { background:var(--page); color:var(--ink); border-color:var(--page); transform:translateY(-3px) rotate(-1deg); font-weight:800; }
+  .segs { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:16px; }
+  .segs .muted { color:var(--on-desk-2); }
+
+  /* pages: pale visa stock with fine guilloche lines */
+  .card { position:relative; background:var(--page); color:var(--ink); border-radius:var(--r); padding:18px 18px 16px; margin-bottom:16px;
+    background-image:repeating-radial-gradient(circle at 100% 0, transparent 0 9px, rgba(43,53,255,.07) 9px 10px), linear-gradient(var(--page), var(--page));
+    box-shadow:0 1px 0 rgba(255,255,255,.5) inset, 0 14px 28px -12px rgba(5,8,90,.65); }
   .row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
-  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:12px; }
-  label { display:block; font-size:12.5px; color:var(--ink-2); margin-bottom:3px; }
-  input, select, textarea { width:100%; font:inherit; font-size:14px; color:var(--ink); background:var(--surface); border:1px solid var(--line); border-radius:9px; padding:8px 11px; }
-  input:focus, select:focus, textarea:focus { outline:none; border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft); }
-  input[type=checkbox] { width:auto; margin-right:7px; }
-  .check { display:flex; align-items:center; font-size:14px; color:var(--ink); margin:4px 0; }
-  .muted { color:var(--ink-2); font-size:13.5px; } .tiny { color:var(--ink-3); font-size:12.5px; }
-  .tag { display:inline-block; font-size:12px; padding:2px 9px; border-radius:980px; background:var(--soft); color:var(--ink-2); margin:2px 4px 2px 0; }
-  .tag.fit { background:var(--good-bg); color:var(--good); font-weight:600; } .tag.check { background:var(--warn-bg); color:var(--warn); font-weight:600; }
-  .reason { font-size:13.5px; margin:2px 0; padding-left:20px; position:relative; }
-  .reason:before { position:absolute; left:2px; font-weight:700; } .reason.plus:before { content:"+"; color:var(--good); } .reason.flag:before { content:"!"; color:var(--warn); } .reason.block:before { content:"x"; color:var(--bad); }
-  .chip { display:inline-flex; align-items:center; gap:6px; background:var(--accent-soft); color:var(--accent); border-radius:980px; padding:3px 6px 3px 11px; font-size:13px; margin:2px 4px 2px 0; }
-  .chip button { border:0; background:none; padding:0 4px; color:inherit; font-size:15px; line-height:1; }
-  .score { font-weight:700; font-variant-numeric:tabular-nums; }
-  .cols { display:grid; grid-template-columns:repeat(auto-fill,minmax(250px,1fr)); gap:10px; align-items:start; }
-  .thread { background:var(--bg); border-radius:10px; padding:8px 10px; margin-top:8px; font-size:13px; white-space:pre-wrap; max-height:200px; overflow:auto; }
-  .err { color:var(--bad); font-size:13.5px; min-height:20px; margin-top:8px; }
-  .toast { position:fixed; left:50%; bottom:22px; transform:translateX(-50%); background:var(--ink); color:var(--bg); padding:9px 18px; border-radius:980px; font-size:14px; z-index:9; }
-  table { width:100%; border-collapse:collapse; font-size:14px; } td, th { text-align:left; padding:7px 8px; border-bottom:1px solid var(--soft); } th { color:var(--ink-2); font-weight:600; }
-  .stickymsg { position:sticky; bottom:12px; background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:8px 12px; font-size:13.5px; margin-top:10px; }
-  .stickymsg:empty { display:none; }
-  .auth { max-width:380px; margin:8vh auto 0; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:14px; }
+  label { display:block; font:700 11.5px/1.3 var(--type); letter-spacing:.1em; text-transform:uppercase; color:var(--ink-2); margin-bottom:4px; }
+  input, select, textarea { width:100%; font:400 15px/1.4 var(--typed); color:var(--ink); background:#fff; border:2px solid rgba(20,20,58,.28); border-radius:4px; padding:8px 10px; accent-color:var(--violet); }
+  input:focus, select:focus, textarea:focus { outline:none; border-color:var(--violet); box-shadow:0 0 0 3px rgba(91,43,224,.25); }
+  input[type=checkbox] { width:18px; height:18px; margin-right:9px; flex:none; }
+  .check { display:flex; align-items:center; font:500 14.5px var(--type); text-transform:none; letter-spacing:0; color:var(--ink); margin:5px 0; }
+  .muted { color:var(--ink-2); font-size:14px; } .tiny { color:var(--ink-3); font-size:12.5px; }
+  .tag { display:inline-block; font:700 11px/1 var(--type); letter-spacing:.1em; text-transform:uppercase; padding:4px 8px; border:2px solid currentColor; border-radius:3px; color:var(--ink-2); margin:2px 4px 2px 0; }
+  .tag.fit { color:var(--good); } .tag.check { color:var(--warn); }
+  .reason { font:400 14px/1.4 var(--typed); margin:4px 0; padding-left:22px; position:relative; }
+  .reason:before { position:absolute; left:0; font:700 15px/1.2 var(--typed); } .reason.plus:before { content:"+"; color:var(--good); } .reason.flag:before { content:"!"; color:var(--warn); } .reason.block:before { content:"×"; color:var(--bad); }
+  .chip { display:inline-flex; align-items:center; gap:6px; background:var(--page-2); color:var(--ink); border:2px solid var(--ink); border-radius:3px; padding:2px 4px 2px 9px; font:600 13px var(--type); margin:3px 5px 3px 0; }
+  .chip button { border:0; background:none; padding:0 5px; color:inherit; font-size:16px; line-height:1; } .chip button:hover { background:none; color:var(--bad); transform:none; }
+  .thread { background:#fff; border:2px dashed var(--line); border-radius:4px; padding:9px 11px; margin-top:8px; font:400 13px/1.45 var(--typed); white-space:pre-wrap; max-height:220px; overflow:auto; }
+  .err { color:var(--bad); font:700 13.5px var(--type); min-height:20px; margin-top:8px; }
+  .on-desk .err, .auth > .err { color:#FFB4C0; }
+  .toast { position:fixed; left:50%; bottom:24px; transform:translateX(-50%); background:var(--yellow); color:var(--ink); border:3px double var(--ink); padding:10px 20px; border-radius:4px; font:700 14px var(--type); z-index:9; animation:pop .45s var(--out) both; }
+  table { width:100%; border-collapse:collapse; font:14px var(--typed); } td, th { text-align:left; padding:8px 8px; border-bottom:2px dotted var(--line); } th { font:700 11.5px var(--type); letter-spacing:.1em; text-transform:uppercase; color:var(--ink-2); }
+  .stickymsg { position:sticky; bottom:14px; background:var(--yellow); color:var(--ink); border:3px double var(--ink); border-radius:4px; padding:9px 14px; font:700 13.5px var(--type); margin-top:12px; } .stickymsg:empty { display:none; }
+  .auth { max-width:430px; margin:7vh auto 0; }
+  .auth h1 { font-size:46px; line-height:1; margin:18px 0 10px; font-weight:800; } .auth > p { color:var(--on-desk-2); margin-bottom:22px; max-width:34ch; }
+
+  /* a job is a visa page; its verdict is the stamp */
+  .spread { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:22px 22px; align-items:start; }
+  .visa { margin:0; padding-top:16px; }
+  .visa-head { display:flex; justify-content:space-between; gap:10px; font:700 11px var(--type); letter-spacing:.12em; text-transform:uppercase; color:var(--ink-3); padding-right:150px; }
+  .visa h2 { font-size:25px; line-height:1.12; margin:10px 0 6px; padding-right:130px; font-weight:800; }
+  .where { font:400 14px/1.35 var(--typed); color:var(--ink-2); margin-bottom:12px; }
+  .conds { border-top:2px dotted var(--line); padding-top:10px; margin-top:4px; }
+  .cvline { font:400 13.5px var(--typed); margin:8px 0 0; color:var(--ink-2); } .cvline b { color:var(--ink); }
+  .mrz { margin:14px -18px 12px; padding:7px 18px; background:var(--page-2); font:700 12px/1.35 var(--typed); letter-spacing:.14em; color:rgba(20,20,58,.55); white-space:nowrap; overflow:hidden; text-overflow:clip; user-select:none; }
+  .stamp { position:absolute; top:34px; right:16px; transform:rotate(var(--rot,-9deg)); font:800 21px/1 var(--type); letter-spacing:.09em; text-transform:uppercase; color:var(--good); border:4px double currentColor; border-radius:5px; padding:9px 13px 8px;
+    filter:url(#ink); text-align:center; animation:slam .55s var(--out) both; animation-delay:calc(var(--i,0) * 90ms + 120ms); }
+  .stamp small { display:block; font:700 10px/1 var(--typed); letter-spacing:.2em; margin-top:5px; }
+  .stamp.check { color:var(--warn); --rot:7deg; } .stamp.saved { color:var(--violet); top:auto; bottom:70px; right:24px; --rot:-12deg; font-size:26px; z-index:2; }
+  .visa { animation:land .5s var(--out) both; animation-delay:calc(var(--i,0) * 90ms); }
+  .visa.pressed { animation:thud .3s var(--out); }
+  @keyframes slam { 0% { opacity:0; transform:scale(2.6) rotate(calc(var(--rot,-9deg) - 14deg)); } 55% { opacity:1; transform:scale(.93) rotate(var(--rot,-9deg)); } 100% { opacity:1; transform:scale(1) rotate(var(--rot,-9deg)); } }
+  @keyframes pop { from { opacity:0; transform:translate(-50%,14px) rotate(-3deg); } to { opacity:1; transform:translate(-50%,0) rotate(0); } }
+  @keyframes land { from { opacity:0; translate:0 14px; } to { opacity:1; translate:0 0; } }
+  @keyframes thud { 0%,100% { translate:0 0; } 40% { translate:0 3px; } }
+  .digest { background:var(--yellow); background-image:none; color:var(--ink); border:3px double var(--ink); } .digest .link { color:var(--ink); }
+  .explain ul { margin:8px 0 8px 22px; font-family:var(--typed); }
+  .detail { margin-top:12px; border-top:2px dotted var(--line); padding-top:4px; }
+
+  /* tracker slips and insights blocks */
+  .cols { display:grid; grid-template-columns:repeat(auto-fill,minmax(270px,1fr)); gap:16px; align-items:start; }
+  .cols .card { margin:0; padding:14px; } .cols .card b { font-size:16px; }
+  .stat { margin:0; border-radius:var(--r); padding:16px 16px 14px; color:var(--ink); background-image:none; box-shadow:0 14px 28px -14px rgba(5,8,90,.7); animation:land .5s var(--out) both; animation-delay:calc(var(--i,0) * 70ms); }
+  .stat .n { font:800 44px/1 var(--type); letter-spacing:-.03em; font-variant-numeric:tabular-nums; } .stat .l { font:600 13.5px var(--type); margin-top:6px; }
+  .stat.s0 { background:var(--yellow); } .stat.s1 { background:#7CF0B2; } .stat.s2 { background:#FF9A5C; } .stat.s3 { background:#C7B8FF; } .stat.s4 { background:var(--page); }
+
+  @media (max-width: 860px) { .spread { grid-template-columns:1fr; } .visa h2 { font-size:22px; } }
+  @media (max-width: 520px) { body { padding:16px 12px 80px; } .visa-head { padding-right:0; } .visa h2 { padding-right:0; margin-top:56px; } .stamp { top:44px; font-size:18px; } .brand { font-size:19px; } }
+  @media (prefers-reduced-motion: reduce) { *, *:before, *:after { animation:none !important; transition:none !important; } }
 </style>
 </head>
 <body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><filter id="ink" color-interpolation-filters="sRGB" x="-5%" y="-5%" width="110%" height="110%"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="4" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="2.4"/></filter></svg>
 <div class="wrap" id="app"></div>
 <script>
 "use strict";
@@ -66,6 +129,7 @@ const h = (tag, attrs, ...kids) => {
   for (const c of kids.flat()) if (c != null && c !== false) e.append(c.nodeType ? c : document.createTextNode(String(c)));
   return e;
 };
+const BRAND = "Posto"; // the one place the product name lives
 const $app = document.getElementById("app");
 const state = { me: null, meta: null, feed: null, apps: null, verdict: "fit", insights: null };
 
@@ -86,7 +150,7 @@ function renderAuth(mode = "in") {
   const go = async () => { err.textContent = ""; try { await api(mode === "in" ? "/login" : "/signup", "POST", { email: email.value, password: pw.value }); await boot(); } catch (e) { err.textContent = e.message; } };
   pw.addEventListener("keydown", e => { if (e.key === "Enter") go(); });
   $app.replaceChildren(h("div", { class: "auth" },
-    h("h1", {}, "Job search agent"), h("p", { class: "muted", style: "margin:6px 0 18px" }, "Finds the jobs you can actually apply to, tracks your applications and your replies."),
+    h("span", { class: "brand" }, BRAND), h("h1", {}, "Jobs you can actually take."), h("p", {}, "Every job gets checked against your real situation, and every verdict says why."),
     h("div", { class: "card" }, h("label", {}, "Email"), email, h("div", { style: "height:10px" }), h("label", {}, "Password"), pw, err,
       h("div", { class: "row", style: "margin-top:10px" }, h("button", { class: "primary", onclick: go }, mode === "in" ? "Sign in" : "Create account"),
         h("button", { class: "link", onclick: () => renderAuth(mode === "in" ? "up" : "in") }, mode === "in" ? "New here? Create an account" : "Have an account? Sign in")))));
@@ -163,8 +227,25 @@ function explainList(x) {
 }
 function digestCard(d) {
   if (!d || (!d.newCount && !d.unread)) return null;
-  return h("div", { class: "card", style: "background:var(--accent-soft)" }, h("b", {}, "Since the last sweep "), `${ago(d.at)}: `, d.newCount ? `${d.newCount} new job${d.newCount > 1 ? "s" : ""} that fit you` : "no new matches", d.unread ? `, ${d.unread} application${d.unread > 1 ? "s" : ""} with new replies` : "", ".",
+  return h("div", { class: "card digest" }, h("b", {}, "Since the last sweep "), `${ago(d.at)}: `, d.newCount ? `${d.newCount} new job${d.newCount > 1 ? "s" : ""} that fit you` : "no new matches", d.unread ? `, ${d.unread} application${d.unread > 1 ? "s" : ""} with new replies` : "", ".",
     d.unread ? h("button", { class: "link", onclick: () => { location.hash = "#/tracker"; } }, "See replies") : null);
+}
+// machine-readable zone: the two typed lines at the foot of a passport page, here carrying the job's own data
+const mrzPad = (s, n) => (s.toUpperCase().replace(/[^A-Z0-9]+/g, "<") + "<".repeat(n)).slice(0, n);
+function visaPage(j, i, save, skip) {
+  const slot = h("div"), word = j.verdict === "fit" ? "Fit" : "Check";
+  const where = (j.location || "location not stated").replace(/[\u{1F1E6}-\u{1F1FF}]/gu, "").replace(/\s+/g, " ").trim(), card = h("div", { class: "card visa", style: "--i:" + Math.min(i, 8) },
+    h("div", { class: "visa-head" }, h("span", {}, j.source + " · " + ago(j.posted_at)), h("span", {}, "No. " + String(j.score).padStart(3, "0"))),
+    h("div", { class: "stamp " + j.verdict, style: "--i:" + Math.min(i, 8) }, word, h("small", {}, j.verdict === "fit" ? "ADMITTED" : "CONDITIONS")),
+    h("h2", {}, j.title), h("div", { class: "where", title: where }, j.company + " · " + (where.length > 100 ? where.slice(0, 100) + "..." : where)),
+    h("div", { class: "conds" }, j.reasons.map(r => h("div", { class: "reason " + r.kind }, r.text))),
+    j.cv ? h("div", { class: "cvline" }, "CV to send: ", h("b", {}, j.cv)) : null,
+    h("div", { class: "mrz" }, mrzPad("P<" + word + "<<" + j.title, 44), h("br"), mrzPad(j.company + "<<" + j.score + "<" + (j.cv || "NOCV"), 44)),
+    h("div", { class: "row" },
+      h("button", { class: "primary", onclick: async () => { card.classList.add("pressed"); card.append(h("div", { class: "stamp saved" }, "On file")); await new Promise(r => setTimeout(r, 520)); save(j); } }, "Save to tracker"),
+      h("a", { class: "btn", href: j.url, target: "_blank", rel: "noopener noreferrer" }, "Open posting"), h("button", { onclick: () => skip(j) }, "Not for me"),
+      h("button", { class: "link", onclick: () => { slot.firstChild ? slot.replaceChildren() : slot.replaceChildren(detailPanel(j, state.me.ai)); } }, "Details and CV fit")), slot);
+  return card;
 }
 async function renderToday() {
   const v = state.verdict;
@@ -174,17 +255,11 @@ async function renderToday() {
   const skip = async j => { await api(`/feed/${j.id}/state`, "POST", { state: "dismissed" }); render(); };
   const seg = (k, label) => h("button", { class: v === k ? "on" : "", onclick: () => { state.verdict = k; render(); } }, label);
   $app.replaceChildren(shell("today",
-    h("div", { class: "row", style: "margin-bottom:12px" }, seg("fit", "Ready to apply"), seg("check", "Check first"), seg("all", "All"), h("span", { class: "muted" }, `${data.total} jobs`),
+    h("div", { class: "segs" }, seg("fit", "Ready to apply"), seg("check", "Check first"), seg("all", "All"), h("span", { class: "muted" }, `${data.total} jobs`),
       h("span", { class: "sp", style: "flex:1" }), h("button", { onclick: async () => { const r = await api("/rematch", "POST"); toast(`Re-checked: ${r.stats.fit} fit, ${r.stats.check} to check.`); render(); } }, "Re-check")),
-    state.me.described ? h("p", { class: "tiny", style: "margin-bottom:12px" }, "Using: " + state.me.described) : null,
+    state.me.described ? h("p", { class: "tiny", style: "margin:-4px 0 18px;color:var(--on-desk-2)" }, "Using: " + state.me.described) : null,
     digestCard(dg),
-    data.jobs.length ? data.jobs.map(j => { const slot = h("div"); return h("div", { class: "card" },
-      h("div", { class: "row" }, h("span", { class: "tag " + j.verdict }, j.verdict === "fit" ? "Fits you" : "Check first"), h("span", { class: "score" }, j.score), h("span", { class: "tiny" }, `${j.source} · ${ago(j.posted_at)}`)),
-      h("h2", { style: "margin:6px 0 2px" }, j.title), h("div", { class: "muted", title: j.location }, `${j.company} · ${(j.location || "location not stated").length > 110 ? j.location.slice(0, 110) + "..." : (j.location || "location not stated")}`),
-      h("div", { style: "margin:8px 0" }, j.reasons.map(r => h("div", { class: "reason " + r.kind }, r.text))),
-      j.cv ? h("div", { class: "muted" }, "Suggested CV: ", h("b", {}, j.cv)) : null,
-      h("div", { class: "row", style: "margin-top:10px" }, h("button", { class: "primary", onclick: () => save(j) }, "Save to tracker"), h("a", { class: "btn", href: j.url, target: "_blank", rel: "noopener noreferrer", style: "text-decoration:none" }, "Open posting"), h("button", { onclick: () => skip(j) }, "Not for me"), h("button", { onclick: () => { slot.firstChild ? slot.replaceChildren() : slot.replaceChildren(detailPanel(j, state.me.ai)); } }, "Details and CV fit")), slot); })
-      : h("div", { class: "card" }, h("p", { class: "muted" }, "Nothing here yet. New jobs are checked against your situation every day."), explainList(data.explain))));
+    data.jobs.length ? h("div", { class: "spread" }, data.jobs.map((j, i) => visaPage(j, i, save, skip))) : h("div", { class: "card explain" }, h("p", { class: "muted" }, "Nothing here yet. New jobs are checked against your situation every day."), explainList(data.explain))));
 }
 
 // ---------- tracker ----------
@@ -215,7 +290,7 @@ async function renderTracker() {
 // ---------- insights ----------
 async function renderInsights() {
   const i = await api("/insights");
-  const stat = (n, label) => h("div", { class: "card", style: "margin:0;text-align:center" }, h("div", { style: "font-size:26px;font-weight:700" }, n ?? "-"), h("div", { class: "muted" }, label));
+  let si = 0; const stat = (n, label) => { const k = si++; return h("div", { class: "stat s" + (k % 5), style: "--i:" + k }, h("div", { class: "n" }, n ?? "-"), h("div", { class: "l" }, label)); };
   const cvs = Object.entries(i.byCv);
   $app.replaceChildren(shell("insights",
     h("div", { class: "grid", style: "margin-bottom:12px" }, stat(i.total, "applications tracked"), stat(i.sent, "sent"), stat(i.responseRate == null ? null : i.responseRate + "%", "got an answer"), stat(i.medianDaysToReply == null ? null : i.medianDaysToReply + " d", "typical days to a reply"), stat(i.newFit, "new jobs that fit you")),
@@ -334,7 +409,7 @@ async function renderSettings() {
 // ---------- shell, router ----------
 function shell(active, ...body) {
   const tab = (k, label) => h("button", { class: active === k ? "on" : "", onclick: () => { location.hash = "#/" + k; } }, label);
-  return h("div", {}, h("header", {}, h("h1", {}, "Job search agent"), h("nav", {}, tab("today", "Today"), tab("tracker", "Tracker"), tab("insights", "Insights"), tab("profile", "My situation"), tab("settings", "Settings")), h("span", { class: "sp" }),
+  return h("div", {}, h("header", {}, h("span", { class: "brand" }, BRAND), h("nav", {}, tab("today", "Today"), tab("tracker", "Tracker"), tab("insights", "Insights"), tab("profile", "My situation"), tab("settings", "Settings")), h("span", { class: "sp" }),
     h("span", { class: "tiny" }, state.me.user.email), h("button", { onclick: async () => { await api("/logout", "POST"); state.me = null; render(); } }, "Sign out"),
     h("button", { class: "link", onclick: () => { location.href = "/api/export"; } }, "Download my data")), ...body);
 }

@@ -1,4 +1,6 @@
-# Job search agent (working title)
+# Posto
+
+*Posto* is Italian for a place, a seat, a job.
 
 An open-source job search assistant that runs on your own computer. It finds jobs **you can actually apply to**,
 given your real situation, then tracks your applications and reads your inbox for the replies.
@@ -18,7 +20,7 @@ You find out after reading the whole posting, or after applying. This project ch
 Needs [Node.js](https://nodejs.org) 22.13 or newer.
 
 ```bash
-git clone <this repository> && cd job-search-agent
+git clone <this repository> && cd posto
 npm install          # only needed for email checking (imapflow, mailparser); skip it if you do not want that
 npm start            # http://localhost:8790
 ```

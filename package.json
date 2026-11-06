@@ -1,5 +1,5 @@
 {
-  "name": "job-search-agent",
+  "name": "posto",
   "version": "0.1.0",
   "type": "module",
   "description": "Open-source, local-first job search agent: finds jobs you can actually apply to given your situation (location, permit, hours, relocation), tracks applications and reads your inbox for replies.",

@@ -23,7 +23,7 @@ import { countryList } from "./geo.mjs";
 const here = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC = path.join(here, "..", "public");
 const STATUSES = ["Found", "Ready to send", "Applied", "Replied", "Interviewing", "Offer", "Rejected", "Withdrawn"];
-const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png", ".ico": "image/x-icon" };
+const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png", ".woff2": "font/woff2", ".ico": "image/x-icon" };
 const today = () => new Date().toISOString().slice(0, 10);
 const cap = (v, n) => String(v ?? "").slice(0, n);
 
