@@ -58,3 +58,11 @@ test("tailor: builds a grounded prompt and parses both API shapes; fails without
   await assert.rejects(() => tailor({ provider: "openai", baseUrl: "x", model: "m" }, "summary", { cv: cvPm, job }, async () => ({ ok: false, status: 401, json: async () => ({ error: { message: "bad key" } }) })), /bad key/);
   assert.equal(aiConfigFromInput({ provider: "nope" }), null); assert.equal(aiConfigFromInput({ provider: "ollama" }).model, "llama3.1");
 });
+
+test("pdfText reads glyph-number fonts through the ToUnicode table (Chrome and Word PDFs) and breaks lines", () => {
+  const cmap = zlib.deflateSync(Buffer.from("/CIDInit begincmap 1 begincodespacerange <0000> <FFFF> endcodespacerange 2 beginbfchar <0003> <0020> <0024> <0041> endbfchar 1 beginbfrange <0042> <0045> <0062> endbfrange endcmap"));
+  const content = zlib.deflateSync(Buffer.from("BT /F4 12 Tf 1 0 0 -1 0 20 Tm <0024> Tj 5 0 Td <0042> Tj 5 0 Td <0003> Tj <0043> Tj 1 0 0 -1 0 40 Tm [<0044> -400 <0045>] TJ ET"));
+  const obj = (n, body, stream) => `${n} 0 obj\n<< ${body} >>\n` + (stream ? "stream\n" + stream.toString("latin1") + "\nendstream\n" : "") + "endobj\n";
+  const pdf = Buffer.from("%PDF-1.4\n" + obj(1, "/Type /Page /Resources << /Font << /F4 2 0 R >> >> /Contents 4 0 R") + obj(2, "/Type /Font /Subtype /Type0 /ToUnicode 3 0 R") + obj(3, "/Filter /FlateDecode", cmap) + obj(4, "/Filter /FlateDecode", content) + "%%EOF", "latin1");
+  assert.equal(pdfText(pdf), "Ab c\nd e");
+});

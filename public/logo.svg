@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 120" role="img" aria-label="Posto">
+  <rect width="360" height="120" rx="22" fill="#2B35FF"/>
+  <g transform="rotate(-4 180 60)" fill="none" stroke="#FFD400" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="32" y="17" width="296" height="86" rx="9" stroke-width="6"/>
+    <rect x="41" y="26" width="278" height="68" rx="5" stroke-width="2.5"/>
+    <g stroke-width="9" transform="translate(54 32)">
+      <path d="M4.5 56V4.5H24Q36 4.5 36 17Q36 29.5 24 29.5H4.5"/>
+      <g transform="translate(54 0)"><rect x="4.5" y="4.5" width="31" height="47" rx="15.5"/></g>
+      <g transform="translate(108 0)"><path d="M34 14Q34 4.5 20 4.5Q6 4.5 6 15Q6 25 20 28Q36 31.5 36 42Q36 51.5 20 51.5Q6 51.5 5 41"/></g>
+      <g transform="translate(162 0)"><path d="M2 4.5H38M20 4.5V56"/></g>
+      <g transform="translate(216 0)"><rect x="4.5" y="4.5" width="31" height="47" rx="15.5"/></g>
+    </g>
+  </g>
+</svg>

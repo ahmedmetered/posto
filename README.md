@@ -1,5 +1,7 @@
 # Posto
 
+<p align="center"><img src="public/logo.svg" width="280" alt="Posto"></p>
+
 *Posto* is Italian for a place, a seat, a job.
 
 ![Posto: today's jobs as visa pages, each with a stamped verdict and the reasons](docs/today.jpg)
@@ -48,7 +50,7 @@ lives, default `data/`), `NO_SCHEDULER=1` (do not run the daily sweep from this 
 | **CVs** | Upload `.docx`, `.pdf`, `.txt` or paste text. For every job it shows which of your CVs covers the posting best and which key terms are missing |
 | **AI tailoring (optional)** | Tailored summary, cover letter or gap list, grounded in your CV only. Anthropic, any OpenAI-compatible API, or a local model through Ollama so nothing leaves your machine |
 | **Daily digest** | In the app, and optionally pushed to your phone via ntfy.sh, a Discord or Slack webhook |
-| **Browser extension** | For LinkedIn, Indeed or any page: click it on a posting to see whether it fits you and save it to the tracker. It reads only the page you click it on |
+| **Browser extension** | For LinkedIn, Indeed or any page: a side panel that stays open while you browse; press Check this page on a posting to see whether it fits you and save it to the tracker. It reads a page only when you press the button |
 | **Insights** | Response rate, typical days to a reply, which CV gets answers |
 
 ### Job sources

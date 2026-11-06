@@ -67,19 +67,56 @@ export function docxText(buf) {
   throw new Error("No text found inside the .docx file.");
 }
 
-// best effort for text-based PDFs; scanned or oddly encoded ones come back empty and the user pastes the text instead
+// Text out of a PDF. Handles what browsers and word processors produce: Flate-compressed content streams, and fonts that
+// show glyph numbers instead of letters (Chrome/Skia "Print to PDF", Word, LibreOffice), which are translated back
+// through each font's ToUnicode table. Scanned PDFs have no text and come back empty.
+const inflate = b => { try { return zlib.inflateSync(b); } catch { return b; } };
+const utf16 = hex => { let s = ""; for (let i = 0; i + 3 < hex.length + 1; i += 4) s += String.fromCharCode(parseInt(hex.slice(i, i + 4), 16)); return s; };
+function parseCMap(txt) {
+  const map = new Map();
+  for (const blk of txt.matchAll(/beginbfchar([\s\S]*?)endbfchar/g)) for (const m of blk[1].matchAll(/<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>/g)) map.set(parseInt(m[1], 16), utf16(m[2].padStart(4, "0")));
+  for (const blk of txt.matchAll(/beginbfrange([\s\S]*?)endbfrange/g)) for (const m of blk[1].matchAll(/<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>\s*(<[0-9a-fA-F]+>|\[[^\]]*\])/g)) {
+    const lo = parseInt(m[1], 16), hi = parseInt(m[2], 16);
+    if (m[3][0] === "[") [...m[3].matchAll(/<([0-9a-fA-F]+)>/g)].forEach((d, i) => map.set(lo + i, utf16(d[1].padStart(4, "0"))));
+    else { const base = m[3].slice(1, -1).padStart(4, "0"), head = utf16(base.slice(0, -4)), last = parseInt(base.slice(-4), 16); for (let c = lo; c <= hi && c - lo < 65536; c++) map.set(c, head + String.fromCharCode(last + c - lo)); }
+  }
+  return map;
+}
+const litDecode = q => q.replace(/\\([nrtbf()\\])/g, (_, c) => ({ n: "\n", r: "", t: " ", b: "", f: "" }[c] ?? c)).replace(/\\(\d{1,3})/g, (_, o) => String.fromCharCode(parseInt(o, 8)));
+
 export function pdfText(buf) {
-  const s = buf.toString("latin1"), out = [];
-  const grab = chunk => {
-    for (const m of chunk.matchAll(/\[((?:[^\]\\]|\\.)*)\]\s*TJ|\(((?:[^)\\]|\\.)*)\)\s*Tj/g)) {
-      const inner = m[1] ?? `(${m[2]})`;
-      for (const q of inner.matchAll(/\(((?:[^)\\]|\\.)*)\)/g)) out.push(q[1].replace(/\\([nrtbf()\\])/g, (_, c) => ({ n: "\n", r: "", t: " ", b: "", f: "" }[c] ?? c)).replace(/\\(\d{1,3})/g, (_, o) => String.fromCharCode(parseInt(o, 8))));
-      out.push("\n");
+  const s = buf.toString("latin1");
+  const objs = new Map();
+  for (const m of s.matchAll(/(\d+) 0 obj([\s\S]*?)endobj/g)) objs.set(+m[1], m[2]);
+  const streamOf = body => { const m = body && body.match(/stream\r?\n([\s\S]*?)\r?\nendstream/); return m ? inflate(Buffer.from(m[1], "latin1")) : null; };
+  // font name (/F4) -> its ToUnicode table
+  const cmapOfObj = new Map();
+  for (const [n, body] of objs) { const tu = body.match(/\/ToUnicode\s+(\d+) 0 R/); if (tu) { const st = streamOf(objs.get(+tu[1])); if (st) cmapOfObj.set(n, parseCMap(st.toString("latin1"))); } }
+  const fontByName = new Map();
+  for (const body of objs.values()) {
+    for (const f of body.matchAll(/\/Font\s*(?:<<([^>]*(?:<<[^>]*>>[^>]*)*)>>|(\d+) 0 R)/g)) {
+      const dict = f[1] ?? objs.get(+f[2]) ?? "";
+      for (const p of dict.matchAll(/\/([^\s/<>[\]()]+)\s+(\d+) 0 R/g)) if (cmapOfObj.has(+p[2])) fontByName.set(p[1], cmapOfObj.get(+p[2]));
     }
-  };
+  }
+  const out = [];
+  const tok = /\/([^\s/<>[\]()]+)\s+[\d.]+\s+Tf|(-?[\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]+)\s+Tm|(-?[\d.]+)\s+(-?[\d.]+)\s+T[dD]|T\*|\[((?:[^\]\\]|\\.)*)\]\s*TJ|<([0-9a-fA-F\s]*)>\s*Tj|\(((?:[^)\\]|\\.)*)\)\s*Tj/g;
   for (const m of s.matchAll(/stream\r?\n([\s\S]*?)\r?\nendstream/g)) {
-    const raw = Buffer.from(m[1], "latin1");
-    try { grab(zlib.inflateSync(raw).toString("latin1")); } catch { grab(m[1]); }
+    const text = inflate(Buffer.from(m[1], "latin1")).toString("latin1");
+    if (!/\bBT\b/.test(text)) continue;
+    let cmap = null, y = null, lastY = null;
+    const emit = str => { if (!str) return; if (lastY !== null && y !== null && Math.abs(y - lastY) > 1 && out.length && out[out.length - 1] !== "\n") out.push("\n"); lastY = y; out.push(str); };
+    const hexOut = hex => { hex = hex.replace(/\s+/g, ""); let r = ""; const two = cmap && [...cmap.keys()].some(k => k > 255); const w = two ? 4 : 2; for (let i = 0; i + w <= hex.length; i += w) { const c = parseInt(hex.slice(i, i + w), 16); r += cmap ? (cmap.get(c) ?? "") : String.fromCharCode(c); } return r; };
+    for (const t of text.matchAll(tok)) {
+      if (t[1] !== undefined) cmap = fontByName.get(t[1]) || null;
+      else if (t[7] !== undefined) y = +t[7];
+      else if (t[9] !== undefined) y = (y ?? 0) + +t[9];
+      else if (t[0] === "T*") y = (y ?? 0) + 1;
+      else if (t[10] !== undefined) { let r = ""; for (const q of t[10].matchAll(/<([0-9a-fA-F\s]*)>|\(((?:[^)\\]|\\.)*)\)|(-?[\d.]+)/g)) r += q[1] !== undefined ? hexOut(q[1]) : q[2] !== undefined ? litDecode(q[2]) : +q[3] < -250 ? " " : ""; emit(r); }
+      else if (t[11] !== undefined) emit(hexOut(t[11]));
+      else if (t[12] !== undefined) emit(litDecode(t[12]));
+    }
+    out.push("\n");
   }
   return out.join("").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
 }

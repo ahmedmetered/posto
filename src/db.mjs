@@ -66,6 +66,9 @@ export function openDb(file = path.resolve("data/app.db")) {
   const db = new DatabaseSync(file);
   db.exec("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;");
   db.exec(SCHEMA);
+  // columns added after the first release
+  const cols = db.prepare("PRAGMA table_info(applications)").all().map(c => c.name);
+  for (const c of ["mode", "type", "source"]) if (!cols.includes(c)) db.exec(`ALTER TABLE applications ADD COLUMN ${c} TEXT DEFAULT ''`);
   return db;
 }
 

@@ -16,7 +16,7 @@ export function aiConfigFromInput(input) {
 }
 
 async function call(cfg, system, prompt, fetchImpl) {
-  const signal = AbortSignal.timeout(120000);
+  const signal = AbortSignal.timeout(cfg.provider === "ollama" ? 600000 : 120000); // a local model on a CPU can take minutes
   if (cfg.provider === "anthropic") {
     const r = await fetchImpl(`${cfg.baseUrl}/v1/messages`, { method: "POST", signal, headers: { "content-type": "application/json", "x-api-key": cfg.apiKey, "anthropic-version": "2023-06-01" },
       body: JSON.stringify({ model: cfg.model, max_tokens: 1500, system, messages: [{ role: "user", content: prompt }] }) });
@@ -25,10 +25,10 @@ async function call(cfg, system, prompt, fetchImpl) {
     return (j.content || []).map(c => c.text || "").join("").trim();
   }
   const r = await fetchImpl(`${cfg.baseUrl}/chat/completions`, { method: "POST", signal, headers: { "content-type": "application/json", ...(cfg.apiKey ? { authorization: `Bearer ${cfg.apiKey}` } : {}) },
-    body: JSON.stringify({ model: cfg.model, messages: [{ role: "system", content: system }, { role: "user", content: prompt }] }) });
+    body: JSON.stringify({ model: cfg.model, messages: [{ role: "system", content: system }, { role: "user", content: prompt }], ...(cfg.provider === "ollama" ? { reasoning_effort: "none" } : {}) }) }); // thinking models (qwen3, ...) are minutes slower with thinking on
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(j.error?.message || `AI request failed (${r.status})`);
-  return String(j.choices?.[0]?.message?.content || "").trim();
+  return String(j.choices?.[0]?.message?.content || "").replace(/<think>[\s\S]*?<\/think>/g, "").trim();
 }
 
 const RULES = "Use only facts that are in the CV. Never invent employers, dates, numbers, degrees or skills. If the posting asks for something the CV does not show, do not claim it. Plain text, no markdown headings.";
@@ -37,6 +37,13 @@ const KINDS = {
   cover_letter: { system: `You write short, specific cover letters in the candidate's own voice. ${RULES}`, ask: "Write a cover letter of at most 180 words for this job. No generic openings, no flattery. Lead with the one or two most relevant things from the CV." },
   gaps: { system: `You give honest, practical CV feedback. ${RULES}`, ask: "List what the posting asks for that the CV does not show, and for each say whether it is a real gap or just missing from the wording. Then give 3 concrete edits to the CV." },
 };
+// the models a local Ollama has downloaded, so the settings page can offer them instead of a typed name
+export async function ollamaModels(baseUrl, fetchImpl = fetch) {
+  const root = String(baseUrl || "http://localhost:11434/v1").replace(/\/v1\/?$/, "").replace(/\/+$/, "");
+  const r = await fetchImpl(root + "/api/tags", { signal: AbortSignal.timeout(5000) });
+  if (!r.ok) throw new Error("Ollama answered " + r.status);
+  return ((await r.json()).models || []).map(m => m.name);
+}
 export const TAILOR_KINDS = Object.keys(KINDS);
 
 export async function tailor(cfg, kind, { cv, job }, fetchImpl = fetch) {

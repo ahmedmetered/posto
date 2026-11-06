@@ -69,3 +69,16 @@ test("mailbox passwords are encrypted at rest", () => {
   assert.equal(acc.host, "imap.gmail.com"); assert.deepEqual(acc.folders, ["INBOX", "Jobs"]);
   assert.throws(() => accountFromInput({ user: "nope" }, s => s), /full email/);
 });
+
+test("LinkedIn 'application was sent' confirms the application; non-replies from known companies are not queued for review", () => {
+  const db = openDb(":memory:"), uid = signup(db, "b@example.com", "correct horse battery");
+  const add = (company, role, status) => Number(db.prepare("INSERT INTO applications (user_id, company, role, status, added, updated) VALUES (?, ?, ?, ?, 'x', 'x')").run(uid, company, role, status).lastInsertRowid);
+  const pm = add("Acme", "Product Manager Intern", "Found"), qa = add("Acme", "QA Engineer", "Found");
+  const sent = { from: '"LinkedIn" <jobs-noreply@linkedin.com>', subject: "Ahmed, your application was sent to Acme", text: "Your application was sent. Product Manager Intern at Acme, Milan", html: "", date: new Date("2026-02-01"), messageId: "<s1>" };
+  const r = applyMail(db, uid, sent);
+  assert.equal(r.outcome, "applied"); assert.equal(db.prepare("SELECT status FROM applications WHERE id = ?").get(pm).status, "Applied");
+  assert.equal(db.prepare("SELECT status FROM applications WHERE id = ?").get(qa).status, "Found", "the other Acme role is untouched");
+  const noise = applyMail(db, uid, { from: "LinkedIn <messages-noreply@linkedin.com>", subject: "See hiring trends for Acme", text: "Acme is growing", html: "", date: new Date(), messageId: "<n1>" });
+  assert.equal(noise.outcome, "ignored");
+  assert.equal(db.prepare("SELECT COUNT(*) n FROM mail_review").get().n, 0);
+});

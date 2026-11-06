@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Posto</title>
+<link rel="icon" type="image/svg+xml" href="/mark.svg">
 <style>
   @font-face { font-family:"Bricolage Grotesque"; src:url(/fonts/bricolage.woff2) format("woff2"); font-weight:400 800; font-display:swap; }
   @font-face { font-family:"Courier Prime"; src:url(/fonts/courier-prime.woff2) format("woff2"); font-weight:400; font-display:swap; }
@@ -105,6 +106,20 @@
   .stat .n { font:800 44px/1 var(--type); letter-spacing:-.03em; font-variant-numeric:tabular-nums; } .stat .l { font:600 13.5px var(--type); margin-top:6px; }
   .stat.s0 { background:var(--yellow); } .stat.s1 { background:#7CF0B2; } .stat.s2 { background:#FF9A5C; } .stat.s3 { background:#C7B8FF; } .stat.s4 { background:var(--page); }
 
+
+  /* tracker filters, selection, dialogs */
+  .filters { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:10px; }
+  .fx, .filters input, .filters select { width:auto; font:600 13px var(--type); color:var(--on-desk); background:rgba(255,255,255,.1); border:2px solid rgba(255,255,255,.4); border-radius:4px; padding:8px 10px; }
+  .fx option { color:var(--ink); background:#fff; } .fx::placeholder { color:var(--on-desk-2); }
+  .fx:focus { border-color:var(--yellow); box-shadow:none; }
+  .fxbtn { color:var(--on-desk); border-color:rgba(255,255,255,.4); padding:8px 12px; } .fxbtn:hover { background:var(--on-desk); color:var(--desk); }
+  .fxbtn.on { background:var(--yellow); color:var(--ink); border-color:var(--yellow); }
+  .bulk { position:sticky; top:8px; z-index:5; display:flex; gap:8px; flex-wrap:wrap; align-items:center; background:var(--yellow); color:var(--ink); border:3px double var(--ink); border-radius:4px; padding:8px 12px; margin:8px 0 12px; }
+  .bulk .fxbtn { color:var(--ink); border-color:var(--ink); } .bulk .fxbtn:hover { background:var(--ink); color:var(--yellow); } .bulk .fx { color:var(--ink); background:#fff; border-color:var(--ink); }
+  .slip .pick { position:absolute; top:10px; right:10px; margin:0; } .slip .pick input { margin:0; width:18px; height:18px; }
+  .modal-back { position:fixed; inset:0; background:rgba(8,10,80,.6); display:grid; place-items:center; z-index:20; padding:16px; animation:land .2s var(--out) both; }
+  .modal { background:var(--page); color:var(--ink); border-radius:var(--r); padding:20px; width:min(420px,100%); box-shadow:0 24px 60px -10px rgba(0,0,40,.7); }
+  .modal h2 { margin-bottom:6px; } .modal p { color:var(--ink-2); margin-bottom:12px; } .modal .row { justify-content:flex-end; margin-top:14px; }
   @media (max-width: 860px) { .spread { grid-template-columns:1fr; } .visa h2 { font-size:22px; } }
   @media (max-width: 520px) { body { padding:16px 12px 80px; } .visa-head { padding-right:0; } .visa h2 { padding-right:0; margin-top:56px; } .stamp { top:44px; font-size:18px; } .brand { font-size:19px; } }
   @media (prefers-reduced-motion: reduce) { *, *:before, *:after { animation:none !important; transition:none !important; } }
@@ -138,6 +153,20 @@ async function api(path, method = "GET", body) {
   const j = await r.json().catch(() => ({}));
   if (!r.ok) { const e = new Error(j.error || "Something went wrong."); e.status = r.status; throw e; }
   return j;
+}
+
+// in-page dialog (never the browser's prompt or confirm); resolves to the typed text, true, or null when cancelled
+function ask({ title, text, input = false, placeholder = "", value = "", ok = "OK", danger = false }) {
+  return new Promise(resolve => {
+    const field = input ? h("input", { placeholder, value }) : null, back = h("div", { class: "modal-back" });
+    const close = v => { back.remove(); document.removeEventListener("keydown", onKey); resolve(v); };
+    const done = () => close(input ? field.value : true);
+    const onKey = e => { if (e.key === "Escape") close(null); if (e.key === "Enter" && input) done(); };
+    back.append(h("div", { class: "modal", role: "dialog", "aria-modal": "true", "aria-label": title }, h("h2", {}, title), text ? h("p", {}, text) : null, field,
+      h("div", { class: "row" }, h("button", { onclick: () => close(null) }, "Cancel"), h("button", { class: danger ? "danger" : "primary", onclick: done }, ok))));
+    back.addEventListener("mousedown", e => { if (e.target === back) close(null); });
+    document.addEventListener("keydown", onKey); document.body.append(back); (field || back.querySelector("button.primary, button.danger")).focus();
+  });
 }
 let toastEl; function toast(t) { toastEl?.remove(); toastEl = h("div", { class: "toast" }, t); document.body.append(toastEl); setTimeout(() => toastEl?.remove(), 2800); }
 const ago = iso => { if (!iso) return ""; const d = Math.floor((Date.now() - Date.parse(iso)) / 864e5); return d <= 0 ? "today" : d === 1 ? "1 day ago" : d + " days ago"; };
@@ -263,14 +292,40 @@ async function renderToday() {
 }
 
 // ---------- tracker ----------
+const TF_DEFAULT = { q: "", status: "", mode: "", type: "", loc: "", source: "", track: "", cv: "", added: "", sort: "", top: false, easy: false, sal: false, stale: false, dup: false, replies: false };
+const SORTS = { "": "Sort: by stage", "added-new": "Added: newest first", "added-old": "Added: oldest first", "salary-high": "Salary: highest first", "salary-low": "Salary: lowest first", "company-az": "Company: A to Z", "company-za": "Company: Z to A", "updated": "Recently updated", "applied-new": "Applied: newest first", "applied-old": "Applied: oldest first" };
+const daysAgo = d => (d ? Math.floor((Date.now() - Date.parse(d)) / 864e5) : 9999);
+const salaryNum = s => { const n = (String(s || "").replace(/,/g, "").match(/\d+(?:\.\d+)?\s*k?/gi) || []).map(x => parseFloat(x) * (/k$/i.test(x.trim()) ? 1000 : 1)).filter(x => x >= 500); return n.length ? Math.max(...n) : 0; };
+const dupKey = a => (a.company || "").toLowerCase().replace(/[^a-z0-9]+/g, "") + "|" + (a.role || "").toLowerCase().replace(/\b(junior|senior|intern|internship|stage|m\/f|f\/m)\b/g, "").split(/[^a-z0-9]+/).filter(Boolean).slice(0, 3).sort().join(" ");
+const kwHit = (text, k) => new RegExp("(?<![a-z0-9])" + k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "(?![a-z0-9])", "i").test(text);
+const trackOf = a => { for (const t of state.me.profile?.tracks || []) if (t.keywords.some(k => kwHit(a.role || "", k))) return t.name; return "Other"; };
+const isStale = a => (a.status === "Found" && daysAgo(a.added) > 21) || (a.status === "Applied" && daysAgo(a.updated) > 21);
+function loadTf() { try { return { ...TF_DEFAULT, ...JSON.parse(localStorage.getItem("posto.tf") || "{}") }; } catch { return { ...TF_DEFAULT }; } }
+function saveTf() { try { localStorage.setItem("posto.tf", JSON.stringify(state.tf)); } catch { /* private mode */ } }
+
 async function renderTracker() {
-  const d = await api("/applications"); state.apps = d.applications;
+  const [d, vres] = await Promise.all([api("/applications"), api("/views")]);
+  state.apps = d.applications; state.views = vres.views; state.tf ||= loadTf();
+  const tf = state.tf, apps = d.applications, sel = (state.sel ||= new Set()), shownLimit = (state.limit ||= 60);
+  const redraw = () => { saveTf(); renderTracker(); };
   const patch = async (a, body) => { await api(`/applications/${a.id}`, "PATCH", body); render(); };
-  const cardFor = a => {
-    const msgs = a.messages || [];
-    return h("div", { class: "card", style: "margin:0" },
-      h("div", { class: "row" }, h("b", {}, a.company), a.unread ? h("span", { class: "tag fit" }, a.unread + " new") : null, a.top ? h("span", { class: "tag check" }, "Top pick") : null, a.easy ? h("span", { class: "tag" }, "Easy apply") : null),
-      h("div", { class: "muted" }, a.role), a.location ? h("div", { class: "tiny", title: a.location }, a.location.length > 90 ? a.location.slice(0, 90) + "..." : a.location) : null,
+  const dupCount = {}; apps.forEach(a => { const k = dupKey(a); dupCount[k] = (dupCount[k] || 0) + 1; });
+  const hay = a => `${a.company} ${a.role} ${a.location} ${a.notes} ${a.source} ${a.cv} ${a.status}`.toLowerCase();
+  const toks = tf.q.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const shown = apps.filter(a => (!tf.status || a.status === tf.status) && (!tf.mode || a.mode === tf.mode) && (!tf.type || a.type === tf.type) && (!tf.loc || a.location === tf.loc) && (!tf.source || a.source === tf.source)
+    && (!tf.track || trackOf(a) === tf.track) && (!tf.cv || a.cv === tf.cv) && (!tf.added || (tf.added === "old" ? daysAgo(a.added) > 21 : daysAgo(a.added) <= +tf.added))
+    && (!tf.top || a.top) && (!tf.easy || a.easy) && (!tf.sal || a.salary) && (!tf.stale || !isStale(a)) && (!tf.dup || dupCount[dupKey(a)] > 1) && (!tf.replies || a.unread > 0) && toks.every(t => hay(a).includes(t)));
+  const cmp = { "added-new": (a, b) => b.added.localeCompare(a.added), "added-old": (a, b) => a.added.localeCompare(b.added), "salary-high": (a, b) => salaryNum(b.salary) - salaryNum(a.salary), "salary-low": (a, b) => (salaryNum(a.salary) || 1e12) - (salaryNum(b.salary) || 1e12),
+    "company-az": (a, b) => a.company.localeCompare(b.company), "company-za": (a, b) => b.company.localeCompare(a.company), "updated": (a, b) => b.updated.localeCompare(a.updated),
+    "applied-new": (a, b) => (b.date_applied || "").localeCompare(a.date_applied || ""), "applied-old": (a, b) => (a.date_applied || "9").localeCompare(b.date_applied || "9") }[tf.sort];
+  if (cmp) shown.sort(cmp);
+
+  const card = a => {
+    const msgs = a.messages || [], tags = [a.mode, a.type].filter(Boolean);
+    return h("div", { class: "card slip" },
+      h("label", { class: "pick" }, h("input", { type: "checkbox", "aria-label": "Select " + a.company, checked: sel.has(a.id), onchange: e => { e.target.checked ? sel.add(a.id) : sel.delete(a.id); redraw(); } })),
+      h("div", { class: "row" }, h("b", {}, a.company), a.unread ? h("span", { class: "tag fit" }, a.unread + " new") : null, a.top ? h("span", { class: "tag check" }, "Top pick") : null, a.easy ? h("span", { class: "tag" }, "Easy apply") : null, dupCount[dupKey(a)] > 1 ? h("span", { class: "tag", title: "Same company and a similar role appears more than once" }, "Duplicate?") : null),
+      h("div", { class: "muted" }, a.role), (a.location || tags.length) ? h("div", { class: "tiny", title: a.location }, [...tags, (a.location || "").slice(0, 80)].filter(Boolean).join(" · ")) : null,
       h("div", { style: "margin:8px 0" }, h("select", { "aria-label": "Status", onchange: e => patch(a, { status: e.target.value }) }, d.statuses.map(s => h("option", { value: s, selected: s === a.status }, s)))),
       h("input", { value: a.cv, placeholder: "CV sent", "aria-label": "CV", onchange: e => patch(a, { cv: e.target.value }) }),
       h("textarea", { rows: "2", placeholder: "Notes", style: "margin-top:6px", onchange: e => patch(a, { notes: e.target.value }) }, a.notes),
@@ -279,12 +334,45 @@ async function renderTracker() {
         h("button", { class: "link", onclick: () => patch(a, { top: !a.top }) }, a.top ? "Unstar" : "Star"), h("button", { class: "link", onclick: () => patch(a, { easy: !a.easy }) }, a.easy ? "Not easy apply" : "Easy apply"),
         h("button", { class: "link danger", onclick: async e => { const b = e.target; if (b.dataset.arm) { await api(`/applications/${a.id}`, "DELETE"); render(); } else { b.dataset.arm = "1"; b.textContent = "Click again to delete"; setTimeout(() => { b.dataset.arm = ""; b.textContent = "Delete"; }, 3000); } } }, "Delete")));
   };
-  const add = { company: h("input", { placeholder: "Company" }), role: h("input", { placeholder: "Role" }), url: h("input", { placeholder: "Link to the posting (optional)" }) };
-  const addBtn = h("button", { class: "primary", onclick: async () => { try { await api("/applications", "POST", { company: add.company.value, role: add.role.value, url: add.url.value }); render(); } catch (e) { toast(e.message); } } }, "Add");
-  $app.replaceChildren(shell("tracker",
-    h("div", { class: "card" }, h("div", { class: "grid" }, add.company, add.role, add.url), h("div", { style: "margin-top:10px" }, addBtn)),
-    d.statuses.map(s => { const list = d.applications.filter(a => a.status === s); return list.length ? h("div", {}, h("h3", {}, `${s} (${list.length})`), h("div", { class: "cols" }, list.map(cardFor))) : null; }),
-    d.applications.length ? null : h("div", { class: "card muted" }, "No applications yet. Save a job from Today, or add one above.")));
+
+  // ---- filter controls
+  const uniq = f => [...new Set(apps.map(f).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  const pickOf = (key, label, values, fmt = x => x) => h("select", { "aria-label": label, class: "fx", onchange: e => { tf[key] = e.target.value; redraw(); } }, h("option", { value: "" }, label), values.map(v => h("option", { value: Array.isArray(v) ? v[0] : v, selected: tf[key] === (Array.isArray(v) ? v[0] : v) }, fmt(Array.isArray(v) ? v[1] : v))));
+  const toggle = (key, label) => h("button", { class: "fxbtn" + (tf[key] ? " on" : ""), "aria-pressed": String(!!tf[key]), onclick: () => { tf[key] = !tf[key]; redraw(); } }, label);
+  const counts = {}; apps.forEach(a => { counts[a.status] = (counts[a.status] || 0) + 1; });
+  const search = h("input", { type: "search", class: "fx", placeholder: "Search company, role, notes...", "aria-label": "Search applications", value: tf.q, style: "flex:1 1 220px;min-width:180px", oninput: e => { tf.q = e.target.value; clearTimeout(search._t); search._t = setTimeout(() => { saveTf(); renderTracker().then(() => { const s = document.querySelector("input[type=search]"); if (s) { s.focus(); s.setSelectionRange(s.value.length, s.value.length); } }); }, 250); } });
+  const viewNames = Object.keys(state.views);
+  const viewSel = h("select", { class: "fx", "aria-label": "Saved views", onchange: e => { const v = state.views[e.target.value]; if (v) { state.tf = { ...TF_DEFAULT, ...v }; redraw(); } } }, h("option", { value: "" }, "Saved views"), viewNames.map(n => h("option", { value: n }, n)));
+  const saveView = async () => {
+    const name = (await ask({ title: "Save this view", text: "It saves the current filters and sort under a name you can pick later.", input: true, placeholder: "For example: Product, remote, this week", ok: "Save" }) || "").trim(); if (!name) return;
+    await api("/views", "PUT", { views: { ...state.views, [name]: { ...tf } } }); toast("View saved."); renderTracker();
+  };
+  const delView = async () => { const n = viewSel.value; if (!n) { toast("Pick a saved view first."); return; } const v = { ...state.views }; delete v[n]; await api("/views", "PUT", { views: v }); renderTracker(); };
+  const addF = { company: h("input", { placeholder: "Company" }), role: h("input", { placeholder: "Role" }), url: h("input", { placeholder: "Link to the posting (optional)" }) };
+  const adder = h("details", { class: "card" }, h("summary", { style: "cursor:pointer;font-weight:700" }, "Add an application by hand"), h("div", { class: "grid", style: "margin-top:10px" }, addF.company, addF.role, addF.url),
+    h("div", { style: "margin-top:10px" }, h("button", { class: "primary", onclick: async () => { try { await api("/applications", "POST", { company: addF.company.value, role: addF.role.value, url: addF.url.value }); render(); } catch (e) { toast(e.message); } } }, "Add")));
+  const bulkBar = sel.size ? h("div", { class: "bulk" }, h("b", {}, sel.size + " selected"), h("button", { class: "fxbtn", onclick: () => { shown.forEach(a => sel.add(a.id)); redraw(); } }, "Select all shown (" + shown.length + ")"),
+    h("select", { class: "fx", id: "bulkst", "aria-label": "Mark selected as" }, h("option", { value: "" }, "Mark selected as..."), d.statuses.map(s => h("option", { value: s }, s))),
+    h("button", { class: "primary", onclick: async () => { const s = document.getElementById("bulkst").value; if (!s) { toast("Pick a status first."); return; } const r = await api("/applications/bulk", "POST", { ids: [...sel], status: s }); sel.clear(); toast(`${r.updated} moved to ${s}.`); render(); } }, "Apply"),
+    h("button", { class: "fxbtn", onclick: () => { sel.clear(); redraw(); } }, "Clear")) : null;
+
+  const pipeline = h("nav", { class: "segs", "aria-label": "Pipeline stages" }, h("button", { class: !tf.status ? "on" : "", onclick: () => { tf.status = ""; redraw(); } }, `All ${apps.length}`),
+    d.statuses.filter(s => counts[s]).map(s => h("button", { class: tf.status === s ? "on" : "", onclick: () => { tf.status = tf.status === s ? "" : s; redraw(); } }, `${s} ${counts[s]}`)));
+  const active = Object.entries(tf).some(([k, v]) => v && v !== TF_DEFAULT[k]);
+  const visible = shown.slice(0, shownLimit);
+  const body = tf.sort || tf.status
+    ? h("div", { class: "cols" }, visible.map(card))
+    : d.statuses.map(s => { const list = visible.filter(a => a.status === s); return list.length ? h("div", {}, h("h3", {}, `${s} (${shown.filter(a => a.status === s).length})`), h("div", { class: "cols" }, list.map(card))) : null; });
+
+  $app.replaceChildren(shell("tracker", pipeline,
+    h("div", { class: "filters" }, search, pickOf("mode", "All modes", ["Remote", "Hybrid", "On-site"]), pickOf("type", "All types", ["Full-time", "Part-time", "Contract", "Internship", "Freelance"]), pickOf("loc", "All locations", uniq(a => a.location)),
+      pickOf("source", "All sources", uniq(a => a.source)), pickOf("track", "All tracks", [...(state.me.profile?.tracks || []).map(t => t.name), "Other"]), pickOf("cv", "All CVs", uniq(a => a.cv)),
+      pickOf("added", "Any date added", [["0", "Added today"], ["3", "Last 3 days"], ["7", "Last 7 days"], ["old", "Older than 3 weeks"]], x => x), h("select", { class: "fx", "aria-label": "Sort order", onchange: e => { tf.sort = e.target.value; redraw(); } }, Object.entries(SORTS).map(([k, v]) => h("option", { value: k, selected: tf.sort === k }, v)))),
+    h("div", { class: "filters" }, toggle("top", "Top picks"), toggle("easy", "Easy apply"), toggle("sal", "Salary shown"), toggle("stale", `Hide stale (${apps.filter(isStale).length})`), toggle("dup", `Possible duplicates (${apps.filter(a => dupCount[dupKey(a)] > 1).length})`), toggle("replies", `Replies waiting (${apps.filter(a => a.unread > 0).length})`),
+      h("span", { style: "flex:1" }), viewSel, h("button", { class: "fxbtn", onclick: saveView }, "Save this view"), h("button", { class: "fxbtn", onclick: delView }, "Delete view"), active ? h("button", { class: "fxbtn", onclick: () => { state.tf = { ...TF_DEFAULT }; redraw(); } }, "Clear filters") : null),
+    bulkBar, h("p", { class: "tiny", style: "color:var(--on-desk-2);margin:4px 0 14px" }, `${shown.length} of ${apps.length} shown`), adder,
+    shown.length ? [body, shown.length > visible.length ? h("div", { class: "row", style: "justify-content:center;margin:18px 0" }, h("button", { class: "fxbtn", onclick: () => { state.limit += 60; renderTracker(); } }, `Show ${Math.min(60, shown.length - visible.length)} more`)) : null]
+      : h("div", { class: "card muted" }, apps.length ? "Nothing matches these filters. Clear one to see more." : "No applications yet. Save a job from Today, or add one above.")));
 }
 
 // ---------- insights ----------
@@ -355,7 +443,8 @@ async function renderSettings() {
     h("div", { class: "row", style: "margin-top:10px" }, h("button", { class: "primary", onclick: guard(async () => { await api("/mail", "PUT", mailBody()); toast("Saved."); render(); }) }, "Save"),
       mail.configured ? [h("button", { onclick: guard(async () => { say("Logging in..."); const r = await api("/mail/test", "POST"); say("Login works. Folders: " + r.folders.slice(0, 8).join(", ")); }) }, "Test login"),
         h("button", { onclick: guard(async () => { say("Reading mail (dry run, changes nothing)..."); showResult(await api("/mail/check", "POST", { days: 14, dryRun: true })); }) }, "Preview last 14 days"),
-        h("button", { onclick: guard(async () => { say("Reading mail..."); showResult(await api("/mail/check", "POST", { days: 14 })); }) }, "Check now"),
+        h("button", { onclick: guard(async () => { say("Reading mail..."); showResult(await api("/mail/check", "POST", { days: 14 })); render(); }) }, "Check now"),
+        h("button", { title: "Reads the last 60 days again, including emails seen before, and rebuilds the list below", onclick: guard(async () => { say("Re-reading 60 days of mail, this takes a minute..."); showResult(await api("/mail/check", "POST", { days: 60, rescan: true })); }) }, "Re-scan 60 days"),
         h("button", { class: "link danger", onclick: guard(async () => { await api("/mail", "DELETE"); render(); }) }, "Disconnect")] : null),
     mail.configured && mail.last_check ? h("p", { class: "tiny", style: "margin-top:8px" }, "Last check " + ago(mail.last_check) + (mail.last_error ? " failed: " + mail.last_error : mail.last_result ? `: read ${mail.last_result.scanned}, ${mail.last_result.applied.length} updates` : "")) : null,
     review.items.length ? h("div", {}, h("h3", {}, `Emails I was not sure about (${review.items.length})`), h("table", {}, review.items.slice(0, 15).map(r => h("tr", {}, h("td", { class: "tiny" }, r.date), h("td", {}, r.subject || "(no subject)", h("div", { class: "tiny" }, r.sender)), h("td", { class: "tiny" }, `${r.kind} · ${r.match}${r.hint ? " · " + r.hint : ""}`)))),
@@ -375,13 +464,15 @@ async function renderSettings() {
     ls ? h("p", { class: "tiny", style: "margin-top:8px" }, `Last sweep ${ago(ls.at)}: ${ls.added} new postings. ` + Object.entries(ls.counts || {}).map(([k, v]) => `${k} ${v}`).join(", ") + (Object.keys(ls.errors || {}).length ? ` · ${Object.keys(ls.errors).length} source(s) failed` : "")) : h("p", { class: "tiny", style: "margin-top:8px" }, "No sweep has run yet."));
 
   // --- AI
-  const cur = s.ai || { provider: "", baseUrl: "", model: "" };
+  const cur = s.ai || { provider: "", baseUrl: "", model: "" }, modelBox = h("div", { style: "margin-top:8px" });
   const A = { provider: h("select", { onchange: e => { const d = s.aiProviders[e.target.value]; A.base.value = d?.baseUrl || ""; A.model.value = d?.model || ""; } }, h("option", { value: "" }, "Off"), Object.entries(s.aiProviders).map(([k, v]) => h("option", { value: k, selected: k === cur.provider }, v.label))),
     base: h("input", { value: cur.baseUrl }), model: h("input", { value: cur.model }), key: h("input", { type: "password", autocomplete: "off", placeholder: cur.hasKey ? "unchanged" : "API key (not needed for Ollama)" }) };
   const aiCard = h("div", { class: "card" }, h("h2", {}, "AI help (optional)"),
     h("p", { class: "muted", style: "margin-bottom:8px" }, "Writes a tailored CV summary, a cover letter, or a list of gaps for a job, using only what is in your CV. Off by default. With Ollama the text never leaves your computer; with other providers your CV and the posting are sent to them."),
     h("div", { class: "grid" }, field("Provider", A.provider), field("Address", A.base), field("Model", A.model), field("API key", A.key)),
-    h("div", { style: "margin-top:10px" }, h("button", { class: "primary", onclick: guard(async () => { await api("/settings", "PUT", { ai: A.provider.value ? { provider: A.provider.value, baseUrl: A.base.value, model: A.model.value, apiKey: A.key.value } : null }); toast("Saved."); render(); }) }, "Save")));
+    h("div", { class: "row", style: "margin-top:10px" }, h("button", { class: "primary", onclick: guard(async () => { await api("/settings", "PUT", { ai: A.provider.value ? { provider: A.provider.value, baseUrl: A.base.value, model: A.model.value, apiKey: A.key.value } : null }); toast("Saved."); render(); }) }, "Save"),
+      h("button", { onclick: guard(async () => { const r = await api("/ai/models?baseUrl=" + encodeURIComponent(A.base.value)); modelBox.replaceChildren(h("span", { class: "tiny" }, "Pick one: "), r.models.length ? r.models.map(m => h("button", { class: "chip", style: "cursor:pointer", onclick: () => { A.model.value = m; } }, m)) : h("span", { class: "tiny" }, "No models downloaded yet. Run: ollama pull llama3.1")); }) }, "Find my Ollama models"),
+      s.ai ? h("button", { onclick: guard(async () => { say("Asking the model... a local one can take a little while."); const r = await api("/ai/test", "POST", {}); say(`The model answered in ${r.seconds} seconds.`); }) }, "Test it") : null), modelBox);
 
   // --- sources
   const off = new Set(s.feedsOff), feedBoxes = s.feeds.map(f => [f, h("input", { type: "checkbox", checked: !off.has(f) })]);
@@ -398,8 +489,8 @@ async function renderSettings() {
   // --- browser extension (for LinkedIn, Indeed and any other page you are looking at)
   const tokenOut = h("div", {});
   const extCard = h("div", { class: "card" }, h("h2", {}, "Browser extension (optional)"),
-    h("p", { class: "muted", style: "margin-bottom:8px" }, "For jobs on LinkedIn, Indeed or any other site: open a posting, click the extension, and it tells you whether the job fits you and saves it to your tracker. It only reads the page you click it on; nothing is collected in the background and the app never logs in to those sites."),
-    h("ol", { class: "muted", style: "margin:0 0 8px 20px" }, h("li", {}, "In Chrome or Edge open chrome://extensions, turn on Developer mode, choose Load unpacked and pick the extension folder of this project."), h("li", {}, "Create a token below and paste it, with this app's address, into the extension.")),
+    h("p", { class: "muted", style: "margin-bottom:8px" }, "For jobs on LinkedIn, Indeed or any other site: open a posting and press Check this page in the Posto side panel. It tells you whether the job fits you and saves it to your tracker. The panel stays open while you browse. It reads a page only when you press the button; nothing is collected in the background and Posto never logs in to those sites."),
+    h("ol", { class: "muted", style: "margin:0 0 8px 20px" }, h("li", {}, "In Chrome or Edge open chrome://extensions, turn on Developer mode, choose Load unpacked and pick the extension folder of this project."), h("li", {}, "Click the Posto icon to open the side panel, create a token below and paste it, with this app's address, into the panel.")),
     h("div", { class: "row" }, h("button", { class: "primary", onclick: guard(async () => { const r = await api("/token", "POST"); tokenOut.replaceChildren(h("label", {}, "Copy this now. It is shown only once."), h("input", { readonly: true, value: r.token, onfocus: e => e.target.select() }), h("p", { class: "tiny" }, "App address for the extension: " + location.origin)); }) }, s.hasToken ? "Create a new token" : "Create a token"),
       s.hasToken ? h("button", { class: "link danger", onclick: guard(async () => { await api("/token", "DELETE"); toast("Token revoked."); render(); }) }, "Revoke") : null), tokenOut);
 

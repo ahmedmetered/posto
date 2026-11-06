@@ -8,11 +8,12 @@ import { fileURLToPath } from "node:url";
 import { openDb, now } from "./db.mjs";
 import * as auth from "./auth.mjs";
 import { normalizeProfile, defaultProfile, describeProfile } from "./profile.mjs";
-import { evaluate } from "./eligibility.mjs";
+import { evaluate, detectEmployment } from "./eligibility.mjs";
+import { parseLocation } from "./geo.mjs";
 import { matchUser, seedBoards, disabledFeeds, feedNames } from "./sweep.mjs";
 import { ADAPTERS } from "./sources/index.mjs";
 import { rankCvs, textFromUpload } from "./cv.mjs";
-import { tailor, aiConfigFromInput, AI_PROVIDERS, TAILOR_KINDS } from "./ai.mjs";
+import { tailor, aiConfigFromInput, ollamaModels, AI_PROVIDERS, TAILOR_KINDS } from "./ai.mjs";
 import { accountConfig, accountFromInput, testLogin, checkMail } from "./mail/check.mjs";
 import { PROVIDERS } from "./mail/classify.mjs";
 import { encrypt, decrypt } from "./secrets.mjs";
@@ -61,6 +62,11 @@ export function createApp(db, { secureCookies = false, aiFetch = fetch } = {}) {
       lastSweep: last ? JSON.parse(last.v) : null, sweeping, hasToken: !!getSetting(db, userId, "api_token") };
   }
 
+  // labels shown on tracker cards and used by its filters
+  const MODE = { remote: "Remote", hybrid: "Hybrid", onsite: "On-site" };
+  const TYPE = { full_time: "Full-time", part_time: "Part-time", internship: "Internship", contract: "Contract", freelance: "Freelance" };
+  const modeOf = (location, remote) => MODE[parseLocation(location, { remote }).mode] || "";
+  const typeOf = job => TYPE[detectEmployment(job).value] || "";
   const appRow = r => r && ({ ...r, top: !!r.top, easy: !!r.easy });
   const ownApp = (userId, id) => db.prepare("SELECT * FROM applications WHERE id = ? AND user_id = ?").get(Number(id), userId);
 
@@ -109,8 +115,8 @@ export function createApp(db, { secureCookies = false, aiFetch = fetch } = {}) {
       if (p === "/api/ext/check") return send(200, { result, existing: dup ? dup.id : null, hasProfile: !!prow });
       if (dup) return send(200, { id: dup.id, existing: true, result });
       const t = now(), cv = result?.track?.cv || "", easy = b.easy ? 1 : 0;
-      const id = db.prepare("INSERT INTO applications (user_id, company, role, url, status, cv, location, easy, notes, added, updated) VALUES (?, ?, ?, ?, 'Found', ?, ?, ?, ?, ?, ?)")
-        .run(row.id, company || "(unknown)", title, url, cv, cap(b.location, 120), easy, cap(b.source ? `Saved from ${b.source}` : "", 200), t, t).lastInsertRowid;
+      const id = db.prepare("INSERT INTO applications (user_id, company, role, url, status, cv, location, easy, notes, mode, type, source, added, updated) VALUES (?, ?, ?, ?, 'Found', ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+        .run(row.id, company || "(unknown)", title, url, cv, cap(b.location, 120), easy, cap(b.source ? `Saved from ${b.source}` : "", 200), modeOf(job.location, job.remote), typeOf(job), cap(b.source, 80), t, t).lastInsertRowid;
       return send(201, { id: Number(id), existing: false, result });
     }
     return send(404, { error: "Not found." });
@@ -163,8 +169,8 @@ export function createApp(db, { secureCookies = false, aiFetch = fetch } = {}) {
       const dup = db.prepare("SELECT id FROM applications WHERE user_id = ? AND job_id = ?").get(user.id, r.id);
       if (dup) return sendJson(res, 200, { id: dup.id, existing: true });
       const sal = r.salary_json ? JSON.parse(r.salary_json) : null, t = now();
-      const id = db.prepare(`INSERT INTO applications (user_id, job_id, company, role, url, status, cv, location, salary, added, updated) VALUES (?, ?, ?, ?, ?, 'Found', ?, ?, ?, ?, ?)`)
-        .run(user.id, r.id, r.company, r.title, r.url, r.cv || "", r.location, sal ? `${sal.min ?? ""}-${sal.max ?? ""} ${sal.currency || ""}/${sal.period || "year"}` : "", t, t).lastInsertRowid;
+      const id = db.prepare(`INSERT INTO applications (user_id, job_id, company, role, url, status, cv, location, mode, type, source, salary, added, updated) VALUES (?, ?, ?, ?, ?, 'Found', ?, ?, ?, ?, ?, ?, ?, ?)`)
+        .run(user.id, r.id, r.company, r.title, r.url, r.cv || "", r.location, modeOf(r.location, r.remote == null ? null : !!r.remote), typeOf({ title: r.title, description: r.description, employment: r.employment }), r.source, sal ? `${sal.min ?? ""}-${sal.max ?? ""} ${sal.currency || ""}/${sal.period || "year"}` : "", t, t).lastInsertRowid;
       db.prepare("UPDATE user_jobs SET state = 'saved' WHERE user_id = ? AND job_id = ?").run(user.id, r.id);
       return sendJson(res, 201, { id: Number(id) });
     }
@@ -175,18 +181,32 @@ export function createApp(db, { secureCookies = false, aiFetch = fetch } = {}) {
       const by = {}; msgs.forEach(x => (by[x.application_id] ||= []).push({ id: x.ext_id, dir: x.dir, platform: x.platform, text: x.text, ts: x.ts }));
       return sendJson(res, 200, { statuses: STATUSES, applications: rows.map(a => ({ ...a, messages: by[a.id] || [] })) });
     }
+    if (p === "/api/applications/bulk" && method === "POST") {
+      if (!STATUSES.includes(body.status)) throw auth.httpErr(400, "Unknown status.");
+      const ids = (Array.isArray(body.ids) ? body.ids : []).map(Number).filter(Number.isInteger).slice(0, 1000);
+      const up = db.prepare("UPDATE applications SET status = ?, updated = ?, date_applied = CASE WHEN ? = 'Applied' AND date_applied = '' THEN ? ELSE date_applied END WHERE id = ? AND user_id = ?");
+      let n = 0; db.exec("BEGIN");
+      try { for (const id of ids) n += Number(up.run(body.status, now(), body.status, today(), id, user.id).changes); db.exec("COMMIT"); } catch (e) { db.exec("ROLLBACK"); throw e; }
+      return sendJson(res, 200, { updated: n });
+    }
+    if (p === "/api/views" && method === "GET") { const v = getSetting(db, user.id, "views"); return sendJson(res, 200, { views: v ? JSON.parse(v) : {} }); }
+    if (p === "/api/views" && method === "PUT") {
+      const views = {}; for (const [k, v] of Object.entries(body.views || {}).slice(0, 30)) if (v && typeof v === "object") views[cap(k, 60)] = v;
+      const s = JSON.stringify(views); if (s.length > 20000) throw auth.httpErr(413, "Too many saved views.");
+      putSetting(db, user.id, "views", s); return sendJson(res, 200, { views });
+    }
     if (p === "/api/applications" && method === "POST") {
       if (!body.company || !body.role) throw auth.httpErr(400, "Company and role are required.");
       const t = now(), status = STATUSES.includes(body.status) ? body.status : "Found";
-      const id = db.prepare(`INSERT INTO applications (user_id, company, role, url, status, cv, notes, salary, location, top, easy, date_applied, added, updated) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-        .run(user.id, cap(body.company, 120), cap(body.role, 160), cap(/^https?:\/\//i.test(body.url || "") ? body.url : "", 600), status, cap(body.cv, 80), cap(body.notes, 4000), cap(body.salary, 80), cap(body.location, 120), body.top ? 1 : 0, body.easy ? 1 : 0, status === "Applied" ? today() : "", t, t).lastInsertRowid;
+      const id = db.prepare(`INSERT INTO applications (user_id, company, role, url, status, cv, notes, salary, location, mode, type, source, top, easy, date_applied, added, updated) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        .run(user.id, cap(body.company, 120), cap(body.role, 160), cap(/^https?:\/\//i.test(body.url || "") ? body.url : "", 600), status, cap(body.cv, 80), cap(body.notes, 4000), cap(body.salary, 80), cap(body.location, 120), cap(body.mode, 30), cap(body.type, 30), cap(body.source, 80), body.top ? 1 : 0, body.easy ? 1 : 0, status === "Applied" ? today() : "", t, t).lastInsertRowid;
       return sendJson(res, 201, { id: Number(id) });
     }
     if ((m = p.match(/^\/api\/applications\/(\d+)$/))) {
       const a = ownApp(user.id, m[1]); if (!a) throw auth.httpErr(404, "Not found.");
       if (method === "PATCH") {
         const set = [], args = [];
-        const text = { company: 120, role: 160, cv: 80, notes: 4000, salary: 80, location: 120 };
+        const text = { company: 120, role: 160, cv: 80, notes: 4000, salary: 80, location: 120, mode: 30, type: 30, source: 80 };
         for (const [k, n] of Object.entries(text)) if (k in body) { set.push(`${k} = ?`); args.push(cap(body[k], n)); }
         if ("url" in body) { set.push("url = ?"); args.push(/^https?:\/\//i.test(body.url || "") ? cap(body.url, 600) : ""); }
         for (const k of ["top", "easy"]) if (k in body) { set.push(`${k} = ?`); args.push(body[k] ? 1 : 0); }
@@ -274,7 +294,7 @@ export function createApp(db, { secureCookies = false, aiFetch = fetch } = {}) {
     }
     if (p === "/api/mail/check" && method === "POST") {
       const days = Math.min(Math.max(+body.days || 3, 1), 120);
-      const r = await checkMail(db, user.id, { days, dryRun: !!body.dryRun });
+      const r = await checkMail(db, user.id, { days, dryRun: !!body.dryRun, rescan: !!body.rescan });
       if (!r.configured) throw auth.httpErr(400, "Connect a mailbox first.");
       if (r.error) throw auth.httpErr(502, r.error);
       return sendJson(res, 200, r);
@@ -319,6 +339,17 @@ export function createApp(db, { secureCookies = false, aiFetch = fetch } = {}) {
       sweeping = true;
       try { const r = await sweepAndNotify(db, { fetchSources: body.fetch !== false, fetchImpl: aiFetch }); return sendJson(res, 200, { added: r.added, counts: r.counts, errors: r.errors, per: r.per.filter(x => x.user === user.email) }); }
       finally { sweeping = false; }
+    }
+    if (p === "/api/ai/models" && method === "GET") {
+      try { return sendJson(res, 200, { models: await ollamaModels(url.searchParams.get("baseUrl") || undefined) }); }
+      catch { throw auth.httpErr(502, "Could not reach Ollama. Is it running? Start it with: ollama serve"); }
+    }
+    if (p === "/api/ai/test" && method === "POST") {
+      const cfg = aiConfigFor(user.id); if (!cfg) throw auth.httpErr(400, "Save an AI provider first.");
+      const t0 = Date.now();
+      try { await tailor(cfg, "gaps", { cv: "Product manager. Ran discovery and roadmap planning for B2B software.", job: { title: "Product Manager", company: "Test", description: "Own the roadmap." } }, aiFetch); }
+      catch (e) { throw auth.httpErr(502, e.message); }
+      return sendJson(res, 200, { ok: true, seconds: Math.round((Date.now() - t0) / 100) / 10 });
     }
     if (p === "/api/token" && method === "POST") {
       const token = "jst_" + crypto.randomBytes(24).toString("base64url");

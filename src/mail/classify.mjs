@@ -25,7 +25,7 @@ const RULES = [
   ["interview", /colloquio|interview|call conoscitiv|schedule a (call|time|chat)|book a (call|time)|calendly|invit(e|ing) you to (a|an) (call|chat|meeting)|incontro|videocall|google meet|zoom\.us|teams meeting|disponibilit[àa] per|your availability/i],
   ["test", /prova (tecnica|di pre)|pre-?selezione|assignment|take-?home|technical (test|challenge|exercise)|test tecnic|coding challenge|case study|assessment|hackerrank|codility|testgorilla|domanda di progettazione/i],
   ["info", /potresti rispondere|could you (please )?(answer|share|send|confirm|tell)|alcune domande|a few questions|following questions|rispondere alle seguenti|ti chiedo di (inviare|confermare)/i],
-  ["ack", /abbiamo ricevuto|received your application|thank you for (applying|your application|your interest)|grazie per (aver|la tua|il tuo)|application (has been )?(received|submitted)|candidatura (ricevuta|inviata)|we.ll (review|be in touch)|ti contatteremo/i],
+  ["ack", /abbiamo ricevuto|received your application|thank you for (applying|your application|your interest)|grazie per (aver|la tua|il tuo)|application (has been |was )?(received|submitted|sent)|your application to|candidatura (ricevuta|inviata)|la tua candidatura (è stata|e' stata) inviata|we.ll (review|be in touch)|ti contatteremo/i],
 ];
 export function classify(subject = "", body = "") {
   const text = `${subject}\n${body}`.slice(0, 6000);
@@ -66,9 +66,17 @@ export function matchEmail(mail, apps) {
   const companies = new Set(pick.map(h => normCo(h.app.company)));
   if (companies.size > 1) return { kind: "ambiguous", candidates: pick.map(h => h.app.company) };
   if (top < 2) return { kind: "weak", app: pick[0].app };
-  if (pick.length > 1 && live.length !== 1) return { kind: "ambiguous", candidates: pick.map(h => `${h.app.company} - ${h.app.role}`) };
+  if (pick.length > 1 && live.length !== 1) {
+    // several roles at one company: the role named in the mail decides, if exactly one fits best
+    const text = `${mail.subject || ""} ${(mail.body || "").slice(0, 1500)}`.toLowerCase();
+    const scored = pick.map(h => ({ h, s: roleWords(h.app.role).filter(w => text.includes(w)).length / Math.max(1, roleWords(h.app.role).length) })).sort((a, b) => b.s - a.s);
+    if (scored[0].s >= 0.6 && scored[0].s > scored[1].s) return { kind: "strong", app: scored[0].h.app };
+    return { kind: "ambiguous", candidates: pick.map(h => `${h.app.company} - ${h.app.role}`) };
+  }
   return { kind: "strong", app: pick[0].app };
 }
+const ROLE_NOISE = new Set(["junior", "senior", "the", "and", "for", "with", "remote", "hybrid", "intern", "internship", "stage", "stagista", "milano", "milan", "italy", "italia"]);
+const roleWords = role => String(role || "").toLowerCase().split(/[^a-z0-9+#]+/).filter(w => w.length >= 3 && !ROLE_NOISE.has(w));
 
 // ---------- status mapping ----------
 const RANK = { Found: 0, "Ready to send": 1, Applied: 2, Replied: 3, Interviewing: 4, Offer: 5 };

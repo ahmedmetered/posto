@@ -50,7 +50,8 @@ export function applyMail(db, userId, mail, { skip = [], dryRun = false } = {}) 
   if (match.app && skip.some(s => (match.app.company || "").toLowerCase().includes(s.toLowerCase()))) return { outcome: "ignored" };
   if (match.kind === "none") return { outcome: "ignored" };
   const kind = classify(m.subject, m.body);
-  if (kind === "other" && match.kind !== "strong") return { outcome: "ignored" };
+  if (kind === "other") return { outcome: "ignored" }; // not a reply: newsletters, job alerts, account mail
+  if (kind === "ack" && match.kind !== "strong") return { outcome: "ignored" }; // an acknowledgement we cannot place is not worth a review
   if (match.kind === "strong" && kind !== "other") {
     const next = decide(kind, match.app);
     if (dryRun) return { outcome: "strong", kind, app: match.app, change: next ? `${match.app.status} -> ${next}` : "no change" };
@@ -73,7 +74,7 @@ export function applyMail(db, userId, mail, { skip = [], dryRun = false } = {}) 
   return { outcome: "review", kind, match: match.kind, hint };
 }
 
-export async function checkMail(db, userId, { days = 3, dryRun = false, log = () => {} } = {}) {
+export async function checkMail(db, userId, { days = 3, dryRun = false, rescan = false, log = () => {} } = {}) {
   const row = db.prepare("SELECT * FROM mail_accounts WHERE user_id = ?").get(userId);
   if (!row) return { configured: false };
   const cfg = accountConfig(row), me = cfg.user.toLowerCase();
@@ -86,7 +87,8 @@ export async function checkMail(db, userId, { days = 3, dryRun = false, log = ()
     const boxes = [...cfg.folders];
     try { for (const b of await client.list()) if (b.specialUse === "\\Junk" && !boxes.includes(b.path)) boxes.push(b.path); } catch { /* no junk folder */ }
     const since = new Date(Date.now() - days * 864e5);
-    const seenRows = new Set(db.prepare("SELECT msg_id FROM mail_seen WHERE user_id = ?").all(userId).map(r => r.msg_id));
+    const seenRows = rescan ? new Set() : new Set(db.prepare("SELECT msg_id FROM mail_seen WHERE user_id = ?").all(userId).map(r => r.msg_id)); // rescan: look at mail again even if it was seen before (status changes are idempotent)
+    if (rescan && !dryRun) db.prepare("DELETE FROM mail_review WHERE user_id = ?").run(userId);
     const markSeen = db.prepare("INSERT OR IGNORE INTO mail_seen (user_id, msg_id) VALUES (?, ?)");
     for (const box of boxes) {
       const lock = await client.getMailboxLock(box, { readOnly: true }); // read-only: nothing is flagged, moved or deleted

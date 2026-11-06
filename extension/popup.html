@@ -1,27 +1,30 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">
+<title>Posto</title>
 <style>
-  :root { --bg:#fff; --ink:#1D1D1F; --ink2:#6E6E73; --line:#D2D2D7; --accent:#0071E3; --good:#1D7A36; --warn:#946A00; --bad:#D70015; }
-  @media (prefers-color-scheme: dark) { :root { --bg:#17171A; --ink:#F5F5F7; --ink2:#A1A1A6; --line:#38383D; --accent:#0A84FF; --good:#30D158; --warn:#FFD60A; --bad:#FF453A; } }
-  * { box-sizing:border-box; } body { margin:0; width:340px; padding:14px; font:14px/1.45 -apple-system,"Segoe UI",Roboto,sans-serif; background:var(--bg); color:var(--ink); }
-  h1 { font-size:15px; margin:0 0 8px; } .muted { color:var(--ink2); font-size:12.5px; }
-  .verdict { display:inline-block; padding:2px 10px; border-radius:980px; font-weight:600; font-size:12.5px; border:1px solid currentColor; }
+  :root { --bg:#fff; --ink:#14143A; --ink2:#4A4A7A; --line:#C9C5F2; --accent:#5B2BE0; --good:#0B7A4B; --warn:#C2470A; --bad:#D4002A; --desk:#2B35FF; --yellow:#FFD400; }
+  * { box-sizing:border-box; } body { margin:0; padding:0 14px 18px; font:14px/1.45 "Segoe UI",system-ui,sans-serif; background:var(--bg); color:var(--ink); }
+  .top { display:flex; align-items:center; gap:10px; margin:0 -14px 14px; padding:10px 14px; background:var(--desk); color:#fff; }
+  .top img { width:32px; height:32px; border-radius:8px; } .top b { font-size:16px; letter-spacing:.14em; text-transform:uppercase; color:var(--yellow); }
+  h1 { font-size:16px; margin:0 0 4px; } .muted { color:var(--ink2); font-size:12.5px; }
+  .verdict { display:inline-block; padding:2px 10px; border-radius:3px; font-weight:800; font-size:12px; letter-spacing:.1em; text-transform:uppercase; border:2px solid currentColor; }
   .fit { color:var(--good); } .check { color:var(--warn); } .no { color:var(--bad); }
-  .reason { font-size:13px; margin:3px 0; padding-left:16px; position:relative; } .reason:before { position:absolute; left:2px; font-weight:700; }
+  .reason { font:13px/1.4 "Courier New",monospace; margin:3px 0; padding-left:16px; position:relative; } .reason:before { position:absolute; left:2px; font-weight:700; }
   .reason.plus:before { content:"+"; color:var(--good); } .reason.flag:before { content:"!"; color:var(--warn); } .reason.block:before { content:"x"; color:var(--bad); }
-  button { font:inherit; font-size:13.5px; border-radius:980px; border:1px solid var(--line); background:var(--bg); color:var(--ink); padding:6px 14px; cursor:pointer; }
-  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600; }
-  input { width:100%; font:inherit; font-size:13px; padding:6px 9px; margin:3px 0 8px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--ink); }
-  label { font-size:12px; color:var(--ink2); } .row { display:flex; gap:8px; align-items:center; margin-top:10px; } .err { color:var(--bad); font-size:13px; }
+  button { font:700 13px "Segoe UI",system-ui,sans-serif; border-radius:4px; border:2px solid var(--ink); background:transparent; color:var(--ink); padding:8px 14px; cursor:pointer; }
+  button:hover { background:var(--ink); color:#fff; } button.primary { background:var(--ink); color:#fff; } button.primary:hover { background:var(--accent); border-color:var(--accent); } button:disabled { opacity:.5; }
+  input { width:100%; font:13px "Courier New",monospace; padding:7px 9px; margin:3px 0 8px; border:2px solid var(--line); border-radius:4px; background:var(--bg); color:var(--ink); }
+  label { font:700 11px "Segoe UI",sans-serif; letter-spacing:.1em; text-transform:uppercase; color:var(--ink2); } .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:10px; } .err { color:var(--bad); font-size:13px; margin-top:8px; }
 </style></head>
 <body>
-  <h1 id="title">Reading this page...</h1>
-  <div class="muted" id="where"></div>
+  <div class="top"><img src="icons/128.png" alt=""><b>Posto</b></div>
+  <h1 id="title">Open a job posting</h1>
+  <div class="muted" id="where">Then press Check this page. Posto reads a page only when you press the button.</div>
   <div id="out"></div>
-  <div class="row"><button class="primary" id="save" hidden>Save to my tracker</button><button id="cfgbtn">Connect</button></div>
-  <div id="cfg" hidden style="margin-top:10px">
-    <label>Where the app runs</label><input id="server" placeholder="http://localhost:7678">
-    <label>Access token (Settings > Browser extension)</label><input id="token" type="password" placeholder="jst_...">
+  <div class="row"><button class="primary" id="checkbtn" hidden>Check this page</button><button class="primary" id="save" hidden>Save to my tracker</button><button id="cfgbtn">Settings</button></div>
+  <div id="cfg" hidden style="margin-top:12px">
+    <label>Where Posto runs</label><input id="server" placeholder="http://localhost:7678">
+    <label>Access token (Posto > Settings > Browser extension)</label><input id="token" type="password" placeholder="jst_...">
     <button id="saveCfg">Save</button>
   </div>
   <div class="err" id="err"></div>
