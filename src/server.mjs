@@ -362,7 +362,7 @@ export function createApp(db, { secureCookies = false, aiFetch = fetch } = {}) {
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
-  const db = openDb(process.env.DB_FILE || path.resolve("data/app.db")), port = +process.env.PORT || 8790;
+  const db = openDb(process.env.DB_FILE || path.resolve("data/app.db")), port = +process.env.PORT || 7678;
   http.createServer(createApp(db, { secureCookies: process.env.SECURE_COOKIES === "1" })).listen(port, "127.0.0.1", () => console.log(`http://localhost:${port}`));
   if (process.env.NO_SCHEDULER !== "1") startScheduler(db);
 }

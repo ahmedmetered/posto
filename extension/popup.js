@@ -2,7 +2,7 @@ import { extractJob } from "./extract.mjs";
 
 const $ = id => document.getElementById(id);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
-let cfg = { server: "http://localhost:8790", token: "" }, job = null;
+let cfg = { server: "http://localhost:7678", token: "" }, job = null;
 
 async function call(path, body) {
   const r = await fetch(cfg.server.replace(/\/+$/, "") + path, { method: body ? "POST" : "GET", headers: { authorization: "Bearer " + cfg.token, ...(body ? { "content-type": "application/json" } : {}) }, body: body ? JSON.stringify(body) : undefined });

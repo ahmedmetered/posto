@@ -26,13 +26,13 @@ Needs [Node.js](https://nodejs.org) 22.13 or newer.
 ```bash
 git clone https://github.com/ahmedmetered/posto.git && cd posto
 npm install          # only needed for email checking (imapflow, mailparser); skip it if you do not want that
-npm start            # http://localhost:8790
+npm start            # http://localhost:7678
 ```
 
 Open the address, create a local account, describe your situation, then use **Settings > Run the sweep now** to fetch
 jobs. After that a sweep runs by itself every day at the hour you choose, as long as the app is running.
 
-Environment variables: `PORT` (default 8790), `DB_FILE` (default `data/app.db`), `DATA_DIR` (where the encryption key
+Environment variables: `PORT` (default 7678), `DB_FILE` (default `data/app.db`), `DATA_DIR` (where the encryption key
 lives, default `data/`), `NO_SCHEDULER=1` (do not run the daily sweep from this process).
 
 ## What it does
