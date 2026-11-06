@@ -1,0 +1,357 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Job search agent</title>
+<style>
+  :root { --bg:#F5F5F7; --surface:#fff; --ink:#1D1D1F; --ink-2:#6E6E73; --ink-3:#86868B; --line:#D2D2D7; --soft:#E8E8ED; --accent:#0071E3; --accent-soft:rgba(0,113,227,.1);
+    --good:#1D7A36; --good-bg:#E6F4EA; --warn:#946A00; --warn-bg:#FFF3C9; --bad:#D70015; --bad-bg:#FCE9EA; --r:14px; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#0A0A0C; --surface:#17171A; --ink:#F5F5F7; --ink-2:#A1A1A6; --ink-3:#8E8E93; --line:#38383D; --soft:#2A2A2E; --accent:#0A84FF; --accent-soft:rgba(10,132,255,.18);
+    --good:#30D158; --good-bg:rgba(48,209,88,.14); --warn:#FFD60A; --warn-bg:rgba(255,214,10,.12); --bad:#FF453A; --bad-bg:rgba(255,69,58,.14); } }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font:15px/1.47 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,Helvetica,Arial,sans-serif; background:var(--bg); color:var(--ink); padding:20px 16px 80px; }
+  .wrap { max-width:920px; margin:0 auto; }
+  h1 { font-size:22px; font-weight:700; } h2 { font-size:17px; margin-bottom:10px; } h3 { font-size:14px; margin:14px 0 6px; color:var(--ink-2); font-weight:600; }
+  header { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:18px; }
+  header .sp { flex:1; }
+  nav { display:flex; gap:6px; flex-wrap:wrap; }
+  button, .btn { font:inherit; font-size:14px; background:var(--surface); color:var(--ink); border:1px solid var(--line); border-radius:980px; padding:7px 15px; cursor:pointer; }
+  button:hover { border-color:var(--ink-3); } button:disabled { opacity:.5; cursor:default; }
+  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600; }
+  button.on { background:var(--ink); border-color:var(--ink); color:var(--surface); font-weight:600; }
+  button.danger { color:var(--bad); }
+  button.link { border:0; background:none; color:var(--accent); padding:0 4px; }
+  .card { background:var(--surface); border-radius:var(--r); padding:16px; margin-bottom:12px; }
+  .row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:12px; }
+  label { display:block; font-size:12.5px; color:var(--ink-2); margin-bottom:3px; }
+  input, select, textarea { width:100%; font:inherit; font-size:14px; color:var(--ink); background:var(--surface); border:1px solid var(--line); border-radius:9px; padding:8px 11px; }
+  input:focus, select:focus, textarea:focus { outline:none; border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft); }
+  input[type=checkbox] { width:auto; margin-right:7px; }
+  .check { display:flex; align-items:center; font-size:14px; color:var(--ink); margin:4px 0; }
+  .muted { color:var(--ink-2); font-size:13.5px; } .tiny { color:var(--ink-3); font-size:12.5px; }
+  .tag { display:inline-block; font-size:12px; padding:2px 9px; border-radius:980px; background:var(--soft); color:var(--ink-2); margin:2px 4px 2px 0; }
+  .tag.fit { background:var(--good-bg); color:var(--good); font-weight:600; } .tag.check { background:var(--warn-bg); color:var(--warn); font-weight:600; }
+  .reason { font-size:13.5px; margin:2px 0; padding-left:20px; position:relative; }
+  .reason:before { position:absolute; left:2px; font-weight:700; } .reason.plus:before { content:"+"; color:var(--good); } .reason.flag:before { content:"!"; color:var(--warn); } .reason.block:before { content:"x"; color:var(--bad); }
+  .chip { display:inline-flex; align-items:center; gap:6px; background:var(--accent-soft); color:var(--accent); border-radius:980px; padding:3px 6px 3px 11px; font-size:13px; margin:2px 4px 2px 0; }
+  .chip button { border:0; background:none; padding:0 4px; color:inherit; font-size:15px; line-height:1; }
+  .score { font-weight:700; font-variant-numeric:tabular-nums; }
+  .cols { display:grid; grid-template-columns:repeat(auto-fill,minmax(250px,1fr)); gap:10px; align-items:start; }
+  .thread { background:var(--bg); border-radius:10px; padding:8px 10px; margin-top:8px; font-size:13px; white-space:pre-wrap; max-height:200px; overflow:auto; }
+  .err { color:var(--bad); font-size:13.5px; min-height:20px; margin-top:8px; }
+  .toast { position:fixed; left:50%; bottom:22px; transform:translateX(-50%); background:var(--ink); color:var(--bg); padding:9px 18px; border-radius:980px; font-size:14px; z-index:9; }
+  table { width:100%; border-collapse:collapse; font-size:14px; } td, th { text-align:left; padding:7px 8px; border-bottom:1px solid var(--soft); } th { color:var(--ink-2); font-weight:600; }
+  .stickymsg { position:sticky; bottom:12px; background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:8px 12px; font-size:13.5px; margin-top:10px; }
+  .stickymsg:empty { display:none; }
+  .auth { max-width:380px; margin:8vh auto 0; }
+</style>
+</head>
+<body>
+<div class="wrap" id="app"></div>
+<script>
+"use strict";
+// tiny DOM helper: all text goes through textContent, never innerHTML
+const h = (tag, attrs, ...kids) => {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (v == null || v === false) continue;
+    if (k.startsWith("on")) e.addEventListener(k.slice(2), v);
+    else if (k === "class") e.className = v;
+    else if (k === "value") e.value = v;
+    else if (k === "checked") e.checked = !!v;
+    else e.setAttribute(k, v === true ? "" : v);
+  }
+  for (const c of kids.flat()) if (c != null && c !== false) e.append(c.nodeType ? c : document.createTextNode(String(c)));
+  return e;
+};
+const $app = document.getElementById("app");
+const state = { me: null, meta: null, feed: null, apps: null, verdict: "fit", insights: null };
+
+async function api(path, method = "GET", body) {
+  const r = await fetch("/api" + path, { method, headers: body ? { "content-type": "application/json" } : {}, body: body ? JSON.stringify(body) : undefined });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) { const e = new Error(j.error || "Something went wrong."); e.status = r.status; throw e; }
+  return j;
+}
+let toastEl; function toast(t) { toastEl?.remove(); toastEl = h("div", { class: "toast" }, t); document.body.append(toastEl); setTimeout(() => toastEl?.remove(), 2800); }
+const ago = iso => { if (!iso) return ""; const d = Math.floor((Date.now() - Date.parse(iso)) / 864e5); return d <= 0 ? "today" : d === 1 ? "1 day ago" : d + " days ago"; };
+
+// ---------- auth ----------
+function renderAuth(mode = "in") {
+  const email = h("input", { type: "email", autocomplete: "email", placeholder: "you@example.com" });
+  const pw = h("input", { type: "password", autocomplete: mode === "in" ? "current-password" : "new-password", placeholder: mode === "in" ? "Password" : "At least 10 characters" });
+  const err = h("div", { class: "err" });
+  const go = async () => { err.textContent = ""; try { await api(mode === "in" ? "/login" : "/signup", "POST", { email: email.value, password: pw.value }); await boot(); } catch (e) { err.textContent = e.message; } };
+  pw.addEventListener("keydown", e => { if (e.key === "Enter") go(); });
+  $app.replaceChildren(h("div", { class: "auth" },
+    h("h1", {}, "Job search agent"), h("p", { class: "muted", style: "margin:6px 0 18px" }, "Finds the jobs you can actually apply to, tracks your applications and your replies."),
+    h("div", { class: "card" }, h("label", {}, "Email"), email, h("div", { style: "height:10px" }), h("label", {}, "Password"), pw, err,
+      h("div", { class: "row", style: "margin-top:10px" }, h("button", { class: "primary", onclick: go }, mode === "in" ? "Sign in" : "Create account"),
+        h("button", { class: "link", onclick: () => renderAuth(mode === "in" ? "up" : "in") }, mode === "in" ? "New here? Create an account" : "Have an account? Sign in")))));
+}
+
+// ---------- shared widgets ----------
+function chips(values, options, onChange) {
+  const box = h("div", {}); const name = c => (options.find(o => o.code === c) || {}).name || c;
+  const draw = () => {
+    const sel = h("select", { onchange: e => { const v = e.target.value; if (v && !values.includes(v)) { values.push(v); onChange(values); draw(); } } },
+      h("option", { value: "" }, "Add a country..."), options.map(o => h("option", { value: o.code }, o.name)));
+    box.replaceChildren(h("div", {}, values.map(c => h("span", { class: "chip" }, name(c), h("button", { type: "button", "aria-label": "Remove " + name(c), onclick: () => { values.splice(values.indexOf(c), 1); onChange(values); draw(); } }, "×")))), sel);
+  };
+  draw(); return box;
+}
+const checks = (label, all, picked, labels = {}) => h("div", {}, h("label", {}, label), all.map(v => h("label", { class: "check" }, h("input", { type: "checkbox", checked: picked.includes(v), onchange: e => { if (e.target.checked) { if (!picked.includes(v)) picked.push(v); } else picked.splice(picked.indexOf(v), 1); } }), labels[v] || v)));
+
+// ---------- profile ----------
+function renderProfile(first) {
+  const p = JSON.parse(JSON.stringify(state.me.profile || state.me.defaults)); const C = state.meta.countries;
+  const f = {
+    home: h("select", { onchange: e => { p.home_country = e.target.value; } }, h("option", { value: "" }, "Choose..."), C.map(c => h("option", { value: c.code, selected: c.code === p.home_country }, c.name))),
+    city: h("input", { value: p.home_city, placeholder: "Optional" }),
+    hours: h("input", { type: "number", min: "1", max: "80", value: p.max_hours_week ?? "", placeholder: "No limit" }),
+    floor: h("input", { type: "number", min: "0", value: p.salary_floor.amount ?? "", placeholder: "None" }),
+    cur: h("input", { value: p.salary_floor.currency, maxlength: "3" }),
+    tit: h("input", { value: p.titles_exclude.join(", "), placeholder: "e.g. sales, intern" }),
+    exc: h("input", { value: p.excluded_companies.join(", "), placeholder: "Company names, separated by commas" }),
+    sen: h("select", {}, ["intern", "junior", "mid", "senior", "lead"].map(s => h("option", { value: s, selected: s === p.seniority_max }, s))),
+  };
+  const err = h("div", { class: "err" }), tracksBox = h("div", {});
+  const drawTracks = () => tracksBox.replaceChildren(...p.tracks.map((t, i) => h("div", { class: "card", style: "background:var(--bg)" },
+    h("div", { class: "grid" }, h("div", {}, h("label", {}, "Role type"), h("input", { value: t.name, placeholder: "e.g. Product", oninput: e => { t.name = e.target.value; } })),
+      h("div", {}, h("label", {}, "Job-title words (commas)"), h("input", { value: t.keywords.join(", "), placeholder: "product manager, product owner", oninput: e => { t.keywords = e.target.value.split(","); } })),
+      h("div", {}, h("label", {}, "CV to send"), h("input", { value: t.cv, placeholder: "Name of your CV", oninput: e => { t.cv = e.target.value; } }))),
+    h("button", { class: "link danger", onclick: () => { p.tracks.splice(i, 1); drawTracks(); } }, "Remove"))));
+  drawTracks();
+  const save = async () => {
+    err.textContent = "";
+    if (!p.home_country) { err.textContent = "Choose the country you live in."; return; }
+    const body = { ...p, home_city: f.city.value, max_hours_week: f.hours.value === "" ? null : +f.hours.value, seniority_max: f.sen.value,
+      salary_floor: { amount: f.floor.value === "" ? null : +f.floor.value, currency: f.cur.value || "EUR", period: "year" },
+      titles_exclude: f.tit.value, excluded_companies: f.exc.value, tracks: p.tracks.map(t => ({ ...t, keywords: t.keywords.map(k => k.trim()).filter(Boolean) })) };
+    try { const r = await api("/profile", "PUT", body); state.me.profile = r.profile; state.me.described = r.described; state.feed = null; toast(`Saved. ${r.stats.fit} jobs fit, ${r.stats.check} to check.`); location.hash = "#/today"; render(); } catch (e) { err.textContent = e.message; }
+  };
+  $app.replaceChildren(shell("profile",
+    h("h2", {}, first ? "Tell me your situation" : "Your situation"), h("p", { class: "muted", style: "margin-bottom:12px" }, "Everything I find for you is checked against this. Change it any time and your jobs are re-checked."),
+    h("div", { class: "card" }, h("h2", {}, "Where you live and work"), h("div", { class: "grid" }, h("div", {}, h("label", {}, "Country you live in"), f.home), h("div", {}, h("label", {}, "City"), f.city)),
+      h("h3", {}, "On-site or hybrid jobs are fine in"), chips(p.onsite_countries, C, v => { p.onsite_countries = v; }), h("p", { class: "tiny" }, "Leave empty to use only the country you live in."),
+      checks("Work modes you accept", ["remote", "hybrid", "onsite"], p.modes, { onsite: "on-site" }),
+      h("label", { class: "check" }, h("input", { type: "checkbox", checked: p.remote_needs_home_ok, onchange: e => { p.remote_needs_home_ok = e.target.checked; } }), "Remote jobs only count if they accept people living in my country")),
+    h("div", { class: "card" }, h("h2", {}, "Moving abroad"),
+      h("label", { class: "check" }, h("input", { type: "checkbox", checked: p.relocation.open, onchange: e => { p.relocation.open = e.target.checked; } }), "I would relocate for the right job"),
+      h("h3", {}, "Countries I would move to"), chips(p.relocation.countries, C, v => { p.relocation.countries = v; }),
+      h("label", { class: "check" }, h("input", { type: "checkbox", checked: p.relocation.needs_sponsorship, onchange: e => { p.relocation.needs_sponsorship = e.target.checked; } }), "I need visa sponsorship")),
+    h("div", { class: "card" }, h("h2", {}, "Hours and contract"), h("div", { class: "grid" }, h("div", {}, h("label", {}, "Maximum hours per week (work permit or student limit)"), f.hours)),
+      checks("Contract types", ["full_time", "part_time", "internship", "contract"], p.employment, { full_time: "full-time", part_time: "part-time" }),
+      h("label", { class: "check" }, h("input", { type: "checkbox", checked: p.self_employed_ok, onchange: e => { p.self_employed_ok = e.target.checked; } }), "Freelance / self-employed contracts are OK (I will be warned if my permit may not allow it)")),
+    h("div", { class: "card" }, h("h2", {}, "What you are looking for"), h("p", { class: "muted" }, "Add one or more role types. Each has the words to look for in job titles and the CV to send."), tracksBox,
+      h("button", { onclick: () => { p.tracks.push({ name: "", keywords: [], cv: "" }); drawTracks(); } }, "Add a role type"),
+      h("div", { class: "grid", style: "margin-top:12px" }, h("div", {}, h("label", {}, "Highest level"), f.sen), h("div", {}, h("label", {}, "Title words to avoid"), f.tit), h("div", {}, h("label", {}, "Companies to skip"), f.exc),
+        h("div", {}, h("label", {}, "Minimum yearly pay (optional)"), f.floor), h("div", {}, h("label", {}, "Currency"), f.cur)),
+      h("div", { style: "margin-top:10px" }, checks("Languages you can work in", ["en", "it", "de", "fr", "es", "pt", "nl", "ar"], p.languages, { en: "English", it: "Italian", de: "German", fr: "French", es: "Spanish", pt: "Portuguese", nl: "Dutch", ar: "Arabic" }))),
+    err, h("div", { class: "row" }, h("button", { class: "primary", onclick: save }, first ? "Save and find jobs" : "Save"))));
+}
+
+// ---------- today (feed) ----------
+const WHY = { remote_not_for_you: "remote, but only for people in other countries", seniority: "above the level you set", full_time_limit: "full-time, over your weekly hours limit", wrong_country: "on-site in a country you do not work in", employment_type: "a contract type you do not accept", language: "needs a language you did not list", salary_low: "pays below your minimum", no_freelance: "freelance contract", mode_not_wanted: "a work mode you do not want", no_remote: "remote, and you want on-site", no_sponsorship: "no visa sponsorship", company_excluded: "a company you skip", title_excluded: "a title word you avoid", unpaid: "unpaid or volunteer" };
+function explainList(x) {
+  if (!x) return null;
+  if (!x.onTrack) return h("p", { class: "muted" }, "No recent posting has a title matching your role types. Try more title words in My situation, or add more sources in Settings.");
+  const rows = Object.entries(x.blockedBy).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  return h("div", {}, h("p", { class: "muted" }, `${x.onTrack} recent postings match your role types, but none can be applied to as things stand. What stops them:`), h("ul", { style: "margin:6px 0 6px 20px" }, rows.map(([k, n]) => h("li", {}, `${n}: ${WHY[k] || k}`))), h("p", { class: "tiny" }, "Loosen the rule that matters least to you in My situation and your jobs are re-checked straight away."));
+}
+function digestCard(d) {
+  if (!d || (!d.newCount && !d.unread)) return null;
+  return h("div", { class: "card", style: "background:var(--accent-soft)" }, h("b", {}, "Since the last sweep "), `${ago(d.at)}: `, d.newCount ? `${d.newCount} new job${d.newCount > 1 ? "s" : ""} that fit you` : "no new matches", d.unread ? `, ${d.unread} application${d.unread > 1 ? "s" : ""} with new replies` : "", ".",
+    d.unread ? h("button", { class: "link", onclick: () => { location.hash = "#/tracker"; } }, "See replies") : null);
+}
+async function renderToday() {
+  const v = state.verdict;
+  const data = await api(`/feed?verdict=${v === "all" ? "" : v}&limit=60`); state.feed = data;
+  const dg = (await api("/digest")).digest;
+  const save = async j => { const r = await api(`/feed/${j.id}/track`, "POST"); toast(r.existing ? "Already in your tracker." : "Added to your tracker."); render(); };
+  const skip = async j => { await api(`/feed/${j.id}/state`, "POST", { state: "dismissed" }); render(); };
+  const seg = (k, label) => h("button", { class: v === k ? "on" : "", onclick: () => { state.verdict = k; render(); } }, label);
+  $app.replaceChildren(shell("today",
+    h("div", { class: "row", style: "margin-bottom:12px" }, seg("fit", "Ready to apply"), seg("check", "Check first"), seg("all", "All"), h("span", { class: "muted" }, `${data.total} jobs`),
+      h("span", { class: "sp", style: "flex:1" }), h("button", { onclick: async () => { const r = await api("/rematch", "POST"); toast(`Re-checked: ${r.stats.fit} fit, ${r.stats.check} to check.`); render(); } }, "Re-check")),
+    state.me.described ? h("p", { class: "tiny", style: "margin-bottom:12px" }, "Using: " + state.me.described) : null,
+    digestCard(dg),
+    data.jobs.length ? data.jobs.map(j => { const slot = h("div"); return h("div", { class: "card" },
+      h("div", { class: "row" }, h("span", { class: "tag " + j.verdict }, j.verdict === "fit" ? "Fits you" : "Check first"), h("span", { class: "score" }, j.score), h("span", { class: "tiny" }, `${j.source} · ${ago(j.posted_at)}`)),
+      h("h2", { style: "margin:6px 0 2px" }, j.title), h("div", { class: "muted", title: j.location }, `${j.company} · ${(j.location || "location not stated").length > 110 ? j.location.slice(0, 110) + "..." : (j.location || "location not stated")}`),
+      h("div", { style: "margin:8px 0" }, j.reasons.map(r => h("div", { class: "reason " + r.kind }, r.text))),
+      j.cv ? h("div", { class: "muted" }, "Suggested CV: ", h("b", {}, j.cv)) : null,
+      h("div", { class: "row", style: "margin-top:10px" }, h("button", { class: "primary", onclick: () => save(j) }, "Save to tracker"), h("a", { class: "btn", href: j.url, target: "_blank", rel: "noopener noreferrer", style: "text-decoration:none" }, "Open posting"), h("button", { onclick: () => skip(j) }, "Not for me"), h("button", { onclick: () => { slot.firstChild ? slot.replaceChildren() : slot.replaceChildren(detailPanel(j, state.me.ai)); } }, "Details and CV fit")), slot); })
+      : h("div", { class: "card" }, h("p", { class: "muted" }, "Nothing here yet. New jobs are checked against your situation every day."), explainList(data.explain))));
+}
+
+// ---------- tracker ----------
+async function renderTracker() {
+  const d = await api("/applications"); state.apps = d.applications;
+  const patch = async (a, body) => { await api(`/applications/${a.id}`, "PATCH", body); render(); };
+  const cardFor = a => {
+    const msgs = a.messages || [];
+    return h("div", { class: "card", style: "margin:0" },
+      h("div", { class: "row" }, h("b", {}, a.company), a.unread ? h("span", { class: "tag fit" }, a.unread + " new") : null, a.top ? h("span", { class: "tag check" }, "Top pick") : null, a.easy ? h("span", { class: "tag" }, "Easy apply") : null),
+      h("div", { class: "muted" }, a.role), a.location ? h("div", { class: "tiny", title: a.location }, a.location.length > 90 ? a.location.slice(0, 90) + "..." : a.location) : null,
+      h("div", { style: "margin:8px 0" }, h("select", { "aria-label": "Status", onchange: e => patch(a, { status: e.target.value }) }, d.statuses.map(s => h("option", { value: s, selected: s === a.status }, s)))),
+      h("input", { value: a.cv, placeholder: "CV sent", "aria-label": "CV", onchange: e => patch(a, { cv: e.target.value }) }),
+      h("textarea", { rows: "2", placeholder: "Notes", style: "margin-top:6px", onchange: e => patch(a, { notes: e.target.value }) }, a.notes),
+      msgs.length ? h("details", { ontoggle: e => { if (e.target.open && a.unread) api(`/applications/${a.id}`, "PATCH", { unread: 0 }); } }, h("summary", { class: "muted", style: "cursor:pointer;margin-top:8px" }, `Replies (${msgs.length})`), h("div", { class: "thread" }, msgs.map(m => `${m.dir === "in" ? "From them" : "From you"} · ${m.ts.slice(0, 10)}\n${m.text}`).join("\n\n"))) : null,
+      h("div", { class: "row", style: "margin-top:8px" }, a.url ? h("a", { href: a.url, target: "_blank", rel: "noopener noreferrer" }, "Posting") : null,
+        h("button", { class: "link", onclick: () => patch(a, { top: !a.top }) }, a.top ? "Unstar" : "Star"), h("button", { class: "link", onclick: () => patch(a, { easy: !a.easy }) }, a.easy ? "Not easy apply" : "Easy apply"),
+        h("button", { class: "link danger", onclick: async e => { const b = e.target; if (b.dataset.arm) { await api(`/applications/${a.id}`, "DELETE"); render(); } else { b.dataset.arm = "1"; b.textContent = "Click again to delete"; setTimeout(() => { b.dataset.arm = ""; b.textContent = "Delete"; }, 3000); } } }, "Delete")));
+  };
+  const add = { company: h("input", { placeholder: "Company" }), role: h("input", { placeholder: "Role" }), url: h("input", { placeholder: "Link to the posting (optional)" }) };
+  const addBtn = h("button", { class: "primary", onclick: async () => { try { await api("/applications", "POST", { company: add.company.value, role: add.role.value, url: add.url.value }); render(); } catch (e) { toast(e.message); } } }, "Add");
+  $app.replaceChildren(shell("tracker",
+    h("div", { class: "card" }, h("div", { class: "grid" }, add.company, add.role, add.url), h("div", { style: "margin-top:10px" }, addBtn)),
+    d.statuses.map(s => { const list = d.applications.filter(a => a.status === s); return list.length ? h("div", {}, h("h3", {}, `${s} (${list.length})`), h("div", { class: "cols" }, list.map(cardFor))) : null; }),
+    d.applications.length ? null : h("div", { class: "card muted" }, "No applications yet. Save a job from Today, or add one above.")));
+}
+
+// ---------- insights ----------
+async function renderInsights() {
+  const i = await api("/insights");
+  const stat = (n, label) => h("div", { class: "card", style: "margin:0;text-align:center" }, h("div", { style: "font-size:26px;font-weight:700" }, n ?? "-"), h("div", { class: "muted" }, label));
+  const cvs = Object.entries(i.byCv);
+  $app.replaceChildren(shell("insights",
+    h("div", { class: "grid", style: "margin-bottom:12px" }, stat(i.total, "applications tracked"), stat(i.sent, "sent"), stat(i.responseRate == null ? null : i.responseRate + "%", "got an answer"), stat(i.medianDaysToReply == null ? null : i.medianDaysToReply + " d", "typical days to a reply"), stat(i.newFit, "new jobs that fit you")),
+    h("div", { class: "card" }, h("h2", {}, "Pipeline"), h("table", {}, Object.entries(i.byStatus).map(([s, n]) => h("tr", {}, h("td", {}, s), h("td", {}, n))))),
+    h("div", { class: "card" }, h("h2", {}, "Which CV works"), cvs.length ? h("table", {}, h("tr", {}, h("th", {}, "CV"), h("th", {}, "Sent"), h("th", {}, "Answered"), h("th", {}, "Interviews")), cvs.map(([k, v]) => h("tr", {}, h("td", {}, k), h("td", {}, v.sent), h("td", {}, v.answered), h("td", {}, v.interviews)))) : h("p", { class: "muted" }, "Appears once you have sent applications."))));
+}
+
+// ---------- job details: posting text, which CV covers it best, optional AI help ----------
+function detailPanel(j, ai) {
+  const box = h("div", { class: "detail" }, h("p", { class: "tiny" }, "Loading..."));
+  Promise.all([api(`/feed/${j.id}`), api(`/feed/${j.id}/cv-fit`)]).then(([job, fit]) => {
+    const out = h("div", { class: "thread", style: "display:none;max-height:340px" });
+    const run = async (kind, cv, btn) => {
+      btn.disabled = true; out.style.display = "block"; out.textContent = "Writing...";
+      try { out.textContent = (await api(`/feed/${j.id}/tailor`, "POST", { cv, kind })).text; } catch (e) { out.textContent = e.message; } btn.disabled = false;
+    };
+    const best = fit.ranked[0];
+    box.replaceChildren(
+      fit.hasCvs ? h("div", {}, h("h3", {}, "How your CVs cover this posting"),
+        fit.ranked.map(r => h("div", { style: "margin:6px 0" }, h("b", {}, r.name), h("span", { class: "tag " + (r.coverage >= 60 ? "fit" : "check"), style: "margin-left:8px" }, r.coverage + "% of the key terms"), r.trackPick ? h("span", { class: "tag" }, "your pick for this role type") : null,
+          r.missing.length ? h("div", { class: "tiny" }, "Not in this CV: " + r.missing.join(", ")) : null)),
+        ai ? h("div", { class: "row", style: "margin-top:8px" }, ["summary", "cover_letter", "gaps"].map(k => { const b = h("button", { onclick: () => run(k, best.name, b) }, { summary: "Tailor summary", cover_letter: "Cover letter", gaps: "What is missing" }[k] + ` (${best.name})`); return b; })) : h("p", { class: "tiny" }, "Want a tailored summary or cover letter? Connect an AI model in Settings (a local one needs no key)."), out)
+        : h("p", { class: "muted" }, "Add your CVs in Settings and I will show which one fits each posting best."),
+      h("h3", {}, "Posting"), h("div", { class: "thread", style: "max-height:220px" }, job.description || "No description in the feed. Open the posting for the full text."));
+  }).catch(e => { box.textContent = e.message; });
+  return box;
+}
+
+// ---------- settings ----------
+const field = (label, input, hint) => h("div", {}, h("label", {}, label), input, hint ? h("div", { class: "tiny", style: "margin-top:3px" }, hint) : null);
+const fileToBase64 = f => new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(",")[1] || ""); r.onerror = () => no(new Error("Could not read the file.")); r.readAsDataURL(f); });
+
+async function renderSettings() {
+  const [s, mail, cvd, review] = await Promise.all([api("/settings"), api("/mail"), api("/cvs"), api("/mail/review")]);
+  const msg = h("div", { class: "stickymsg" });
+  const say = (t, bad) => { msg.textContent = t; msg.style.color = bad ? "var(--bad)" : "var(--ink-2)"; };
+  const guard = fn => async () => { try { await fn(); } catch (e) { say(e.message, true); } };
+
+  // --- CVs
+  const cvName = h("input", { placeholder: "Name, e.g. Product EN" }), cvText = h("textarea", { rows: "5", placeholder: "Paste the text of your CV, or choose a file below" }), cvFile = h("input", { type: "file", accept: ".docx,.pdf,.txt,.md" });
+  const cvCard = h("div", { class: "card" }, h("h2", {}, "Your CVs"), h("p", { class: "muted", style: "margin-bottom:8px" }, "Kept on this computer. Used to show which CV fits each job and, if you connect an AI model, to tailor it."),
+    cvd.cvs.length ? h("table", {}, cvd.cvs.map(c => h("tr", {}, h("td", {}, h("b", {}, c.name), h("div", { class: "tiny" }, c.filename || "pasted text")), h("td", { class: "tiny" }, c.chars + " characters"),
+      h("td", {}, h("button", { class: "link danger", onclick: guard(async () => { await api(`/cvs/${c.id}`, "DELETE"); render(); }) }, "Delete"))))) : h("p", { class: "tiny" }, "No CVs yet."),
+    h("h3", {}, "Add or replace a CV"), h("div", { class: "grid" }, field("Name", cvName), field("File (.docx, .pdf, .txt)", cvFile)), h("div", { style: "margin-top:8px" }, field("Or paste the text", cvText)),
+    h("div", { style: "margin-top:8px" }, h("button", { class: "primary", onclick: guard(async () => {
+      const f = cvFile.files[0];
+      await api("/cvs", "PUT", f ? { name: cvName.value, filename: f.name, data: await fileToBase64(f) } : { name: cvName.value, text: cvText.value }); toast("CV saved."); render();
+    }) }, "Save CV")));
+
+  // --- mailbox
+  const M = { provider: h("select", { onchange: e => { M.host.value = mail.providers[e.target.value]?.host || ""; M.port.value = mail.providers[e.target.value]?.port || 993; helpEl.textContent = mail.providers[e.target.value]?.help || ""; } }, Object.keys(mail.providers).map(p => h("option", { value: p, selected: p === (mail.provider || "gmail") }, p))),
+    user: h("input", { type: "email", value: mail.user || "", placeholder: "you@example.com" }), password: h("input", { type: "password", placeholder: mail.configured ? "unchanged" : "App password", autocomplete: "off" }),
+    host: h("input", { value: mail.host || mail.providers[mail.provider || "gmail"].host }), port: h("input", { type: "number", value: mail.port || 993 }),
+    folders: h("input", { value: (mail.folders || ["INBOX"]).join(", ") }), skip: h("input", { value: (mail.skip || []).join(", "), placeholder: "e.g. turing, adecco" }) };
+  const helpEl = h("div", { class: "tiny", style: "margin-top:6px" }, mail.providers[mail.provider || "gmail"].help);
+  M.user.addEventListener("change", () => { const d = M.user.value.split("@")[1] || ""; const pick = /icloud|me\.com|mac\.com/.test(d) ? "icloud" : /gmail|googlemail/.test(d) ? "gmail" : /outlook|hotmail|live|msn/.test(d) ? "outlook" : /yahoo/.test(d) ? "yahoo" : null; if (pick) { M.provider.value = pick; M.provider.dispatchEvent(new Event("change")); } });
+  const mailBody = () => ({ provider: M.provider.value, user: M.user.value, password: M.password.value, host: M.host.value, port: +M.port.value, folders: M.folders.value, skip: M.skip.value });
+  const showResult = r => say(`Read ${r.scanned} new emails: ${r.applied.length ? r.applied.join("; ") : "no status changes"}${r.review ? `, ${r.review} to review` : ""}.`);
+  const mailCard = h("div", { class: "card" }, h("h2", {}, "Email: update my tracker from replies"),
+    h("p", { class: "muted", style: "margin-bottom:8px" }, "Reads your inbox (read-only: nothing is moved, flagged or deleted), finds replies from companies you applied to, and updates the status. Uncertain matches are listed for you instead of applied. Use an app password, not your normal password; it is stored encrypted on this computer."),
+    h("div", { class: "grid" }, field("Provider", M.provider), field("Email address", M.user), field("App password", M.password), field("IMAP host", M.host), field("Port", M.port), field("Folders to read", M.folders), field("Ignore these companies", M.skip)), helpEl,
+    h("div", { class: "row", style: "margin-top:10px" }, h("button", { class: "primary", onclick: guard(async () => { await api("/mail", "PUT", mailBody()); toast("Saved."); render(); }) }, "Save"),
+      mail.configured ? [h("button", { onclick: guard(async () => { say("Logging in..."); const r = await api("/mail/test", "POST"); say("Login works. Folders: " + r.folders.slice(0, 8).join(", ")); }) }, "Test login"),
+        h("button", { onclick: guard(async () => { say("Reading mail (dry run, changes nothing)..."); showResult(await api("/mail/check", "POST", { days: 14, dryRun: true })); }) }, "Preview last 14 days"),
+        h("button", { onclick: guard(async () => { say("Reading mail..."); showResult(await api("/mail/check", "POST", { days: 14 })); }) }, "Check now"),
+        h("button", { class: "link danger", onclick: guard(async () => { await api("/mail", "DELETE"); render(); }) }, "Disconnect")] : null),
+    mail.configured && mail.last_check ? h("p", { class: "tiny", style: "margin-top:8px" }, "Last check " + ago(mail.last_check) + (mail.last_error ? " failed: " + mail.last_error : mail.last_result ? `: read ${mail.last_result.scanned}, ${mail.last_result.applied.length} updates` : "")) : null,
+    review.items.length ? h("div", {}, h("h3", {}, `Emails I was not sure about (${review.items.length})`), h("table", {}, review.items.slice(0, 15).map(r => h("tr", {}, h("td", { class: "tiny" }, r.date), h("td", {}, r.subject || "(no subject)", h("div", { class: "tiny" }, r.sender)), h("td", { class: "tiny" }, `${r.kind} · ${r.match}${r.hint ? " · " + r.hint : ""}`)))),
+      h("button", { class: "link", onclick: guard(async () => { await api("/mail/review", "DELETE"); render(); }) }, "Clear this list")) : null);
+
+  // --- schedule and notifications
+  const S = { on: h("input", { type: "checkbox", checked: s.schedule.enabled }), hour: h("select", {}, Array.from({ length: 24 }, (_, i) => h("option", { value: i, selected: i === s.schedule.hour }, String(i).padStart(2, "0") + ":00"))),
+    mailEvery: h("select", {}, [15, 30, 60, 180, 720].map(m => h("option", { value: m, selected: m === s.schedule.mailEveryMinutes }, m < 60 ? m + " minutes" : m / 60 + (m === 60 ? " hour" : " hours")))), hook: h("input", { value: s.webhook, placeholder: "https://ntfy.sh/your-private-topic" }) };
+  const ls = s.lastSweep;
+  const schedCard = h("div", { class: "card" }, h("h2", {}, "Daily sweep and notifications"),
+    h("p", { class: "muted", style: "margin-bottom:8px" }, "While this app is running it looks for new jobs once a day and checks your mailbox. If the computer was asleep, the sweep runs when it wakes."),
+    h("label", { class: "check" }, S.on, "Run the daily sweep automatically"), h("div", { class: "grid", style: "margin-top:8px" }, field("Sweep time", S.hour), field("Check email every", S.mailEvery),
+      field("Send my daily digest to (optional)", S.hook, "ntfy.sh topic, Discord or Slack webhook, or any URL that accepts a POST. Leave empty to see the digest only here.")),
+    h("div", { class: "row", style: "margin-top:10px" }, h("button", { class: "primary", onclick: guard(async () => { await api("/settings", "PUT", { schedule: { enabled: S.on.checked, hour: +S.hour.value, mailEveryMinutes: +S.mailEvery.value }, webhook: S.hook.value }); toast("Saved."); render(); }) }, "Save"),
+      h("button", { onclick: guard(async () => { await api("/settings", "PUT", { webhook: S.hook.value }); await api("/settings/webhook-test", "POST"); say("Test message sent."); }) }, "Send a test"),
+      h("button", { id: "sweepnow", onclick: guard(async () => { say("Sweeping all sources, this takes about a minute..."); const r = await api("/sweep", "POST", {}); toast(`${r.added} new postings.`); render(); }) }, "Run the sweep now")),
+    ls ? h("p", { class: "tiny", style: "margin-top:8px" }, `Last sweep ${ago(ls.at)}: ${ls.added} new postings. ` + Object.entries(ls.counts || {}).map(([k, v]) => `${k} ${v}`).join(", ") + (Object.keys(ls.errors || {}).length ? ` · ${Object.keys(ls.errors).length} source(s) failed` : "")) : h("p", { class: "tiny", style: "margin-top:8px" }, "No sweep has run yet."));
+
+  // --- AI
+  const cur = s.ai || { provider: "", baseUrl: "", model: "" };
+  const A = { provider: h("select", { onchange: e => { const d = s.aiProviders[e.target.value]; A.base.value = d?.baseUrl || ""; A.model.value = d?.model || ""; } }, h("option", { value: "" }, "Off"), Object.entries(s.aiProviders).map(([k, v]) => h("option", { value: k, selected: k === cur.provider }, v.label))),
+    base: h("input", { value: cur.baseUrl }), model: h("input", { value: cur.model }), key: h("input", { type: "password", autocomplete: "off", placeholder: cur.hasKey ? "unchanged" : "API key (not needed for Ollama)" }) };
+  const aiCard = h("div", { class: "card" }, h("h2", {}, "AI help (optional)"),
+    h("p", { class: "muted", style: "margin-bottom:8px" }, "Writes a tailored CV summary, a cover letter, or a list of gaps for a job, using only what is in your CV. Off by default. With Ollama the text never leaves your computer; with other providers your CV and the posting are sent to them."),
+    h("div", { class: "grid" }, field("Provider", A.provider), field("Address", A.base), field("Model", A.model), field("API key", A.key)),
+    h("div", { style: "margin-top:10px" }, h("button", { class: "primary", onclick: guard(async () => { await api("/settings", "PUT", { ai: A.provider.value ? { provider: A.provider.value, baseUrl: A.base.value, model: A.model.value, apiKey: A.key.value } : null }); toast("Saved."); render(); }) }, "Save")));
+
+  // --- sources
+  const off = new Set(s.feedsOff), feedBoxes = s.feeds.map(f => [f, h("input", { type: "checkbox", checked: !off.has(f) })]);
+  const B = { ats: h("select", {}, s.atsList.map(a => h("option", { value: a }, a))), slug: h("input", { placeholder: "e.g. stripe" }) };
+  const srcCard = h("div", { class: "card" }, h("h2", {}, "Where jobs come from"),
+    h("p", { class: "muted", style: "margin-bottom:8px" }, "Public job feeds and company career pages only. I never log in to or scrape LinkedIn or Indeed."),
+    h("div", { class: "row" }, feedBoxes.map(([f, box]) => h("label", { class: "check", style: "margin-right:14px" }, box, f))),
+    h("div", { style: "margin-top:8px" }, h("button", { onclick: guard(async () => { await api("/settings", "PUT", { feedsOff: feedBoxes.filter(([, b]) => !b.checked).map(([f]) => f) }); toast("Saved."); }) }, "Save feeds")),
+    h("h3", {}, `Company career pages I watch (${s.boards.length})`),
+    h("div", { class: "row" }, s.boards.map(b => h("span", { class: "chip" }, `${b.slug} · ${b.ats}`, h("button", { "aria-label": "Stop watching " + b.slug, onclick: guard(async () => { await api(`/boards/${b.id}`, "DELETE"); render(); }) }, "×")))),
+    h("h3", {}, "Watch another company"), h("p", { class: "tiny" }, "Open the company's careers page. If the address looks like boards.greenhouse.io/stripe or jobs.lever.co/stripe, the system is greenhouse or lever and the name is stripe."),
+    h("div", { class: "row", style: "margin-top:6px" }, B.ats, h("div", { style: "flex:1;min-width:160px" }, B.slug), h("button", { onclick: guard(async () => { say("Checking..."); const r = await api("/boards", "POST", { ats: B.ats.value, slug: B.slug.value }); toast(`Added. ${r.postings} open postings.`); render(); }) }, "Add")));
+
+  // --- browser extension (for LinkedIn, Indeed and any other page you are looking at)
+  const tokenOut = h("div", {});
+  const extCard = h("div", { class: "card" }, h("h2", {}, "Browser extension (optional)"),
+    h("p", { class: "muted", style: "margin-bottom:8px" }, "For jobs on LinkedIn, Indeed or any other site: open a posting, click the extension, and it tells you whether the job fits you and saves it to your tracker. It only reads the page you click it on; nothing is collected in the background and the app never logs in to those sites."),
+    h("ol", { class: "muted", style: "margin:0 0 8px 20px" }, h("li", {}, "In Chrome or Edge open chrome://extensions, turn on Developer mode, choose Load unpacked and pick the extension folder of this project."), h("li", {}, "Create a token below and paste it, with this app's address, into the extension.")),
+    h("div", { class: "row" }, h("button", { class: "primary", onclick: guard(async () => { const r = await api("/token", "POST"); tokenOut.replaceChildren(h("label", {}, "Copy this now. It is shown only once."), h("input", { readonly: true, value: r.token, onfocus: e => e.target.select() }), h("p", { class: "tiny" }, "App address for the extension: " + location.origin)); }) }, s.hasToken ? "Create a new token" : "Create a token"),
+      s.hasToken ? h("button", { class: "link danger", onclick: guard(async () => { await api("/token", "DELETE"); toast("Token revoked."); render(); }) }, "Revoke") : null), tokenOut);
+
+  $app.replaceChildren(shell("settings", cvCard, mailCard, schedCard, aiCard, srcCard, extCard, msg));
+}
+
+// ---------- shell, router ----------
+function shell(active, ...body) {
+  const tab = (k, label) => h("button", { class: active === k ? "on" : "", onclick: () => { location.hash = "#/" + k; } }, label);
+  return h("div", {}, h("header", {}, h("h1", {}, "Job search agent"), h("nav", {}, tab("today", "Today"), tab("tracker", "Tracker"), tab("insights", "Insights"), tab("profile", "My situation"), tab("settings", "Settings")), h("span", { class: "sp" }),
+    h("span", { class: "tiny" }, state.me.user.email), h("button", { onclick: async () => { await api("/logout", "POST"); state.me = null; render(); } }, "Sign out"),
+    h("button", { class: "link", onclick: () => { location.href = "/api/export"; } }, "Download my data")), ...body);
+}
+async function render() {
+  try {
+    if (!state.me) { renderAuth(); return; }
+    const route = (location.hash.replace("#/", "") || "today");
+    if (!state.me.profile) { renderProfile(true); return; }
+    if (route === "profile") renderProfile(false); else if (route === "tracker") await renderTracker(); else if (route === "insights") await renderInsights(); else if (route === "settings") await renderSettings(); else await renderToday();
+  } catch (e) { if (e.status === 401) { state.me = null; renderAuth(); } else $app.replaceChildren(h("div", { class: "card err" }, e.message)); }
+}
+async function boot() {
+  try { state.meta = await api("/meta"); state.me = await api("/me"); } catch { state.me = null; }
+  render();
+}
+addEventListener("hashchange", render);
+boot();
+</script>
+</body>
+</html>

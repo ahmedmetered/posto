@@ -1,0 +1,78 @@
+[
+ {
+  "co": "elevenlabs",
+  "ats": "ashby"
+ },
+ {
+  "co": "supabase",
+  "ats": "ashby"
+ },
+ {
+  "co": "alan",
+  "ats": "ashby"
+ },
+ {
+  "co": "canonical",
+  "ats": "greenhouse"
+ },
+ {
+  "co": "contentful",
+  "ats": "greenhouse"
+ },
+ {
+  "co": "raisin",
+  "ats": "greenhouse"
+ },
+ {
+  "co": "sumup",
+  "ats": "greenhouse"
+ },
+ {
+  "co": "remote",
+  "ats": "greenhouse"
+ },
+ {
+  "co": "getyourguide",
+  "ats": "greenhouse"
+ },
+ {
+  "co": "tines",
+  "ats": "greenhouse"
+ },
+ {
+  "co": "gitlab",
+  "ats": "greenhouse"
+ },
+ {
+  "co": "elastic",
+  "ats": "greenhouse"
+ },
+ {
+  "co": "mozilla",
+  "ats": "greenhouse"
+ },
+ {
+  "co": "grafanalabs",
+  "ats": "greenhouse"
+ },
+ {
+  "co": "zapier",
+  "ats": "ashby"
+ },
+ {
+  "co": "posthog",
+  "ats": "ashby"
+ },
+ {
+  "co": "sanity",
+  "ats": "ashby"
+ },
+ {
+  "co": "linear",
+  "ats": "ashby"
+ },
+ {
+  "co": "clickup",
+  "ats": "ashby"
+ }
+]

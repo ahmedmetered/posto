@@ -1,0 +1,29 @@
+{
+  "name": "job-search-agent",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Open-source, local-first job search agent: finds jobs you can actually apply to given your situation (location, permit, hours, relocation), tracks applications and reads your inbox for replies.",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "start": "node src/server.mjs",
+    "sweep": "node src/sweep.mjs",
+    "test": "node --test test/",
+    "explain": "node scripts/explain.mjs"
+  },
+  "optionalDependencies": {
+    "imapflow": "^1.7.8",
+    "mailparser": "^3.14.2"
+  },
+  "license": "MIT",
+  "keywords": [
+    "job-search",
+    "career",
+    "ats",
+    "tracker",
+    "self-hosted",
+    "local-first",
+    "sqlite"
+  ]
+}
