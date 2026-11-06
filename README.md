@@ -112,6 +112,7 @@ It is designed for one person or a household on their own computer, not for the 
 | `src/scheduler.mjs`, `src/digest.mjs` | Daily sweep and mail checks, digest and webhooks |
 | `src/server.mjs`, `src/auth.mjs`, `src/db.mjs`, `src/secrets.mjs` | HTTP API, accounts, SQLite schema, encryption |
 | `public/index.html` | The whole UI in one file, no framework, no build step |
+| `skills/tailor/` | Agent skill and tailoring rules behind the "Brief" buttons, for the AI agent you already use |
 | `extension/` | Chrome/Edge extension (Manifest V3) |
 | `scripts/explain.mjs` | `npm run explain`: why does this profile get so few matches? |
 
@@ -136,6 +137,12 @@ AI and webhook calls with a stubbed `fetch`.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). New job sources are the easiest and most useful contribution: write a `parse*`
 function and a fetcher in `src/sources/index.mjs`, add a fixture test, and register it in `ADAPTERS` or `FEEDS`.
+
+## Credits
+
+The CV and cover-letter tailoring rules, and the one-page, ATS-friendly CV layout rules, are adapted from the application method in
+[ai-job-search](https://github.com/ai-job-search-dev/ai-job-search) by Mads Lorentzen (MIT), via anyjobsearch. See [NOTICE.md](NOTICE.md).
+Posto is an independent project and is not affiliated with or endorsed by it.
 
 ## License
 
