@@ -20,7 +20,7 @@ You find out after reading the whole posting, or after applying. This project ch
 Needs [Node.js](https://nodejs.org) 22.13 or newer.
 
 ```bash
-git clone https://github.com/AhmedHassan21/posto.git && cd posto
+git clone https://github.com/ahmedmetered/posto.git && cd posto
 npm install          # only needed for email checking (imapflow, mailparser); skip it if you do not want that
 npm start            # http://localhost:8790
 ```

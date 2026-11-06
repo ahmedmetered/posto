@@ -28,10 +28,10 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/AhmedHassan21/posto.git"
+    "url": "git+https://github.com/ahmedmetered/posto.git"
   },
-  "homepage": "https://github.com/AhmedHassan21/posto#readme",
+  "homepage": "https://github.com/ahmedmetered/posto#readme",
   "bugs": {
-    "url": "https://github.com/AhmedHassan21/posto/issues"
+    "url": "https://github.com/ahmedmetered/posto/issues"
   }
 }
