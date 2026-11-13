@@ -65,7 +65,8 @@ CREATE TABLE IF NOT EXISTS boards (
 );
 `;
 
-export function openDb(file = path.resolve("data/app.db")) {
+// DB_FILE picks the database for everything that opens it without naming a file: the server, the sweep CLI and the scripts.
+export function openDb(file = process.env.DB_FILE || path.resolve("data/app.db")) {
   if (file !== ":memory:") fs.mkdirSync(path.dirname(file), { recursive: true });
   const db = new DatabaseSync(file);
   db.exec("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;");
